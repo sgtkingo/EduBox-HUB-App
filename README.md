@@ -10,12 +10,18 @@ pracovat s virtuálními zařízeními přes protokol
 
 ```text
 EduBox HUB
-└── App  ← tento repozitář
+├── Board
+├── App  ← tento repozitář
+├── Panel
+│   └── Firmupdater
+└── VSCP
 ```
 
-Dalšími hlavními větvemi jsou
-[Panel](https://github.com/sgtkingo/EduBox-HUB-Panel) a
-[VSCP](https://github.com/sgtkingo/EduBox-HUB-VSCP).
+App spolupracuje s
+[Boardem](https://github.com/sgtkingo/EduBox-HUB-Board) a dalšími zařízeními
+implementujícími [VSCP](https://github.com/sgtkingo/EduBox-HUB-VSCP).
+Alternativní uživatelské rozhraní poskytuje
+[EduBox HUB Panel](https://github.com/sgtkingo/EduBox-HUB-Panel).
 
 ## Funkce
 
