@@ -120,7 +120,7 @@
             this.ModBox.ForeColor = System.Drawing.SystemColors.WindowText;
             this.ModBox.FormattingEnabled = true;
             this.ModBox.Items.AddRange(new object[] {
-            "CONFIG",
+            "CONTROL",
             "CONNECT",
             "DISCONNECT"});
             this.ModBox.Location = new System.Drawing.Point(622, 72);

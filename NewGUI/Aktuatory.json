@@ -4,7 +4,7 @@
     "Nazev": "Micro Servo",
     "Alias": "SG90",
     "Notes": "Servo",
-    "Request_CONFIG": "?type=CONFIG&id=A00&angle=&speed=",
+    "Request_CONTROL": "?type=CONTROL&id=A00&angle=&speed=",
     "PIN1": "PIN",
     "Keywords_configs": {
       "angle": "int",
@@ -21,7 +21,7 @@
     "PIN2": "IN(2)",
     "PIN3": "IN(3)",
     "PIN4": "IN(4)",
-    "Request_CONFIG": "?type=CONFIG&id=A01&angle=&dir=&rpm=",
+    "Request_CONTROL": "?type=CONTROL&id=A01&angle=&dir=&rpm=",
     "Keywords_configs": {
       "angle": "int",
       "dir": "bool",
@@ -35,7 +35,7 @@
     "Alias": "DC",
     "Notes": "",
     "PIN1": "PIN",
-    "Request_CONFIG": "?type=CONFIG&id=A02&speed=&state=",
+    "Request_CONTROL": "?type=CONTROL&id=A02&speed=&state=",
     "Keywords_configs": {
       "speed": "int",
       "state": "bool"
@@ -49,7 +49,7 @@
     "Notes": "Keyes KY-011",
     "PIN1": "PIN1",
     "PIN2": "PIN2",
-    "Request_CONFIG": "?type=CONFIG&id=A03&color=&Brig=",
+    "Request_CONTROL": "?type=CONTROL&id=A03&color=&Brig=",
     "Keywords_configs": {
       "color": "char",
       "Brig": "int"
@@ -63,7 +63,7 @@
     "Notes": "Keyes KY-029",
     "PIN1": "PIN1",
     "PIN2": "PIN2",
-    "Request_CONFIG": "?type=CONFIG&id=A04&color=G&Brig=",
+    "Request_CONTROL": "?type=CONTROL&id=A04&color=G&Brig=",
     "Keywords_configs": {
       "color": "char",
       "Brig": "int"
@@ -78,7 +78,7 @@
     "PIN1": "R",
     "PIN2": "G",
     "PIN3": "B",
-    "Request_CONFIG": "?type=CONFIG&id=A05&BrigR=&BrigG=&BrigB=",
+    "Request_CONTROL": "?type=CONTROL&id=A05&BrigR=&BrigG=&BrigB=",
     "Keywords_configs": {
       "BrigR": "int",
       "BrigG": "int",
@@ -94,7 +94,7 @@
     "PIN1": "R",
     "PIN2": "G",
     "PIN3": "B",
-    "Request_CONFIG": "?type=CONFIG&id=A06&BrigR=&BrigG=&BrigB=",
+    "Request_CONTROL": "?type=CONTROL&id=A06&BrigR=&BrigG=&BrigB=",
     "Keywords_configs": {
       "BrigR": "int",
       "BrigG": "int",
@@ -108,7 +108,7 @@
     "Alias": "IR",
     "Notes": "Keyes KY-005",
     "PIN1": "PIN",
-    "Request_CONFIG": "?type=CONFIG&id=A07&control=",
+    "Request_CONTROL": "?type=CONTROL&id=A07&control=",
     "Keywords_configs": {
       "control": "bool"
     },
@@ -120,7 +120,7 @@
     "Alias": "7color",
     "Notes": "Keyes KY-034",
     "PIN1": "PIN",
-    "Request_CONFIG": "?type=CONFIG&id=A08&control=",
+    "Request_CONTROL": "?type=CONTROL&id=A08&control=",
     "Keywords_configs": {
       "control": "bool"
     },
@@ -132,7 +132,7 @@
     "Alias": "Laser",
     "Notes": "Keyes KY-008",
     "PIN1": "PIN",
-    "Request_CONFIG": "?type=CONFIG&id=A09&control=",
+    "Request_CONTROL": "?type=CONTROL&id=A09&control=",
     "Keywords_configs": {
       "control": "bool"
     },
@@ -144,7 +144,7 @@
     "Alias": "BuzzP",
     "Notes": "Keyes KY-006",
     "PIN1": "PIN",
-    "Request_CONFIG": "?type=CONFIG&id=A10&freq=&duration=",
+    "Request_CONTROL": "?type=CONTROL&id=A10&freq=&duration=",
     "Keywords_configs": {
       "freq": "int",
       "duration": "int"
@@ -157,7 +157,7 @@
     "Alias": "BuzzA",
     "Notes": "Keyes KY-012",
     "PIN1": "PIN",
-    "Request_CONFIG": "?type=CONFIG&id=A11&control=",
+    "Request_CONTROL": "?type=CONTROL&id=A11&control=",
     "Keywords_configs": {
       "control": "bool"
     },

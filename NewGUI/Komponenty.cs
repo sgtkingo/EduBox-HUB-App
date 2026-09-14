@@ -25,6 +25,7 @@ namespace NewGUI
         public Dictionary<string, string> Keywords_values { get; set; }
         public Dictionary<string, string> Keywords_configs { get; set; }
         public string Request_CONFIG { get; set; }
+        public string Request_CONTROL { get; set; }
         public string Config1 { get; set; }
         public string Config2 { get; set; }
         public string Config3 { get; set; }

@@ -298,7 +298,7 @@ namespace NewGUI
             }
         }
 
-        // ---------- UI pro CONFIG parametry ----------
+        // ---------- UI pro CONTROL parametry ----------
         private void ShowTextBoxesForRequest(string request)
         {
             // reset UI
@@ -397,12 +397,12 @@ namespace NewGUI
                         return;
                     }
 
-                    // ID pro request – ideálně přímo z objektu (pokud máš string Id), jinak fallback z Request_CONFIG
+                    // ID pro request – ideálně přímo z objektu, jinak fallback z Request_CONTROL
                     string idRaw = item.Id.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
                     if (string.IsNullOrWhiteSpace(idRaw))
                     {
-                        var m = Regex.Match(item.Request_CONFIG ?? string.Empty, @"\bid=([^&]+)");
+                        var m = Regex.Match(item.Request_CONTROL ?? string.Empty, @"\bid=([^&]+)");
                         idRaw = m.Success ? m.Groups[1].Value : null;
                     }
 
@@ -436,7 +436,7 @@ namespace NewGUI
                     // one-shot: NEpřepínáme tlačítko na „Zastavit"
                     return;
                 }
-                // CONFIG/UPDATE apod.
+                // CONTROL
                 if (string.IsNullOrEmpty(selectedAlias))
                 {
                     MessageBox.Show("Vyberte aktuátor.");
@@ -450,7 +450,7 @@ namespace NewGUI
                     return;
                 }
 
-                string requestOriginal = it.Request_CONFIG;
+                string requestOriginal = it.Request_CONTROL;
                 if (string.IsNullOrWhiteSpace(requestOriginal))
                 {
                     MessageBox.Show("V JSONu chybí Request pro vybraný aktuátor.");
@@ -509,7 +509,7 @@ namespace NewGUI
             if (item == null)
                 return;
 
-            string request = item.Request_CONFIG;
+            string request = item.Request_CONTROL;
             if (string.IsNullOrWhiteSpace(request))
                 return;
 
@@ -549,8 +549,8 @@ namespace NewGUI
             var item = FindByDisplayAlias(selectedAlias);
             if (item == null) return;
 
-            string request = item.Request_CONFIG;
-            if (!string.IsNullOrWhiteSpace(request) && ModBox.Text == "CONFIG")
+            string request = item.Request_CONTROL;
+            if (!string.IsNullOrWhiteSpace(request) && ModBox.Text == "CONTROL")
             {
                 ShowTextBoxesForRequest(request);
             }
@@ -630,12 +630,12 @@ namespace NewGUI
 
             var mode = ModBox.Text?.Trim();
 
-            // CONFIG – ponecháváš existující ShowTextBoxesForRequest
-            if (string.Equals(mode, "CONFIG", StringComparison.OrdinalIgnoreCase))
+            // CONTROL – zobrazí runtime řídicí hodnoty z requestu aktuátoru
+            if (string.Equals(mode, "CONTROL", StringComparison.OrdinalIgnoreCase))
             {
                 var itCfg = FindSelectedActuator();
-                if (itCfg != null && !string.IsNullOrWhiteSpace(itCfg.Request_CONFIG))
-                    ShowTextBoxesForRequest(itCfg.Request_CONFIG);
+                if (itCfg != null && !string.IsNullOrWhiteSpace(itCfg.Request_CONTROL))
+                    ShowTextBoxesForRequest(itCfg.Request_CONTROL);
                 return;
             }
 
@@ -698,7 +698,7 @@ namespace NewGUI
 
                 ready = ready && hasAct && p1ok && p2ok && p3ok && p4ok;
             }
-            else if (m.Equals("CONFIG", StringComparison.OrdinalIgnoreCase))
+            else if (m.Equals("CONTROL", StringComparison.OrdinalIgnoreCase))
             {
                 // všechny viditelné textboxy musí být vyplněné
                 bool t1ok = !textBox1.Visible || !string.IsNullOrWhiteSpace(textBox1.Text?.Trim());
