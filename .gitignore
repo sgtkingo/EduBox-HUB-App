@@ -2,3 +2,4 @@
 *.vsidx
 bin/
 obj/
+/packages

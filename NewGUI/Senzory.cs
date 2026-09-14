@@ -1,4 +1,4 @@
-﻿using System;                                                   // Základní typy a události
+using System;                                                   // Základní typy a události
 using System.Collections.Generic;                               // Kolekce jako List<>, Dictionary<> 
 using System.Data;                                              // (aktuálně nepoužito)
 using System.Drawing;                                           // Barvy a grafické typy (pro graf/obrázky)
@@ -55,7 +55,7 @@ namespace NewGUI
         private ChartManager _chartManager;
         private ImageManager _imageManager; // NEW: replace old image-loading method
 
-        private const string ApiVersion = "1.2";
+        private const string ApiVersion = "1.4";
         private Timer _resetHoldTimer;
         private bool _suppressNextResetClick = false;
 
@@ -76,6 +76,7 @@ namespace NewGUI
             comPortWatcherTimer.Interval = 500;
             comPortWatcherTimer.Tick += ComPortWatcherTimer_Tick;
             comPortWatcherTimer.Start();
+            ComPortWatcherTimer_Tick(null, EventArgs.Empty);
 
             // serial controller must exist before UI queries IsOpen
             _serialController = new SerialController();
@@ -87,8 +88,15 @@ namespace NewGUI
 
             LoadSensorsFromJson();
 
-            comboBoxSensor.SelectedIndex = -1;
-            comboBoxMode.SelectedIndex = -1;
+            if (comboBoxSensor.Items.Contains("DHT11"))
+                comboBoxSensor.SelectedItem = "DHT11";
+            else if (comboBoxSensor.Items.Count > 0)
+                comboBoxSensor.SelectedIndex = 0;
+
+            if (comboBoxMode.Items.Contains("UPDATE"))
+                comboBoxMode.SelectedItem = "UPDATE";
+            else if (comboBoxMode.Items.Count > 0)
+                comboBoxMode.SelectedIndex = 0;
 
             pictureBox1.SizeMode = PictureBoxSizeMode.Zoom;
 
@@ -278,22 +286,47 @@ namespace NewGUI
         {
             chart1.Series.Clear();
 
-            Series series = new Series("measuring")
-            {
-                ChartType = SeriesChartType.Line,
-                XValueType = ChartValueType.Int32,
-                YValueType = ChartValueType.Double,
-                IsVisibleInLegend = false
-            };
-            chart1.Series.Add(series);
-
             if (chart1.ChartAreas.Count == 0)
-                chart1.ChartAreas.Add(new ChartArea());
+            {
+                var ca = new ChartArea("ChartArea1");
+                ca.BackColor = Color.White;
+                ca.BorderWidth = 0;
+                chart1.ChartAreas.Add(ca);
+            }
 
-            chart1.ChartAreas[0].AxisX.Title = "Počet vzorků";
-            chart1.ChartAreas[0].AxisY.LineWidth = 2;
-            chart1.Series["measuring"].BorderWidth = 2;
-            chart1.Series["measuring"].Color = Color.Black;
+            var area = chart1.ChartAreas[0];
+            area.AxisX.Title = "Počet vzorků";
+            area.AxisX.TitleFont = new Font("Segoe UI Variable Text", 9F, FontStyle.Regular);
+            area.AxisX.TitleForeColor = Color.FromArgb(90, 90, 95);
+            area.AxisX.Minimum = 0;
+            area.AxisX.Maximum = 10;
+            area.AxisX.Interval = 1;
+            area.AxisX.MajorGrid.LineColor = Color.FromArgb(230, 232, 236);
+            area.AxisX.LineColor = Color.Gainsboro;
+
+            area.AxisY.Title = "Hodnota";
+            area.AxisY.TitleFont = new Font("Segoe UI Variable Text", 9F, FontStyle.Regular);
+            area.AxisY.TitleForeColor = Color.FromArgb(90, 90, 95);
+            area.AxisY.Minimum = 0;
+            area.AxisY.Maximum = 100;
+            area.AxisY.Interval = 20;
+            area.AxisY.MajorGrid.LineColor = Color.FromArgb(230, 232, 236);
+            area.AxisY.LineColor = Color.Gainsboro;
+
+            if (chart1.Legends.Count == 0)
+            {
+                var leg = new Legend("Legend1")
+                {
+                    BackColor = Color.Transparent,
+                    BorderWidth = 0,
+                    Docking = Docking.Top,
+                    Font = new Font("Segoe UI Variable Text", 8.25F, FontStyle.Regular),
+                    IsTextAutoFit = false
+                };
+                chart1.Legends.Add(leg);
+            }
+
+            chart1.BringToFront();
         }
 
         private Komponenty FindSelectedComponent()
@@ -486,6 +519,10 @@ namespace NewGUI
         private void ComPortWatcherTimer_Tick(object sender, EventArgs e)
         {
             var currentPorts = SerialPort.GetPortNames().ToList();
+            if (!currentPorts.Contains("COM22", StringComparer.OrdinalIgnoreCase))
+            {
+                currentPorts.Insert(0, "COM22");
+            }
 
             if (!currentPorts.SequenceEqual(lastKnownPorts))
             {
@@ -498,9 +535,11 @@ namespace NewGUI
                 {
                     comboBoxCOM.SelectedItem = selected;
                 }
-                else if (currentPorts.Count > 0)
+                else
                 {
-                    comboBoxCOM.SelectedIndex = 0;
+                    comboBoxCOM.SelectedItem = "COM22";
+                    if (comboBoxCOM.SelectedIndex < 0 && comboBoxCOM.Items.Count > 0)
+                        comboBoxCOM.SelectedIndex = 0;
                 }
 
                 lastKnownPorts = currentPorts;
@@ -532,8 +571,8 @@ namespace NewGUI
             string selectedPort = comboBoxCOM.Text?.Trim();
             if (string.IsNullOrWhiteSpace(selectedPort))
             {
-                MessageBox.Show("Prosím vyber COM port.");
-                return;
+                selectedPort = "COM22";
+                comboBoxCOM.SelectedItem = "COM22";
             }
 
             try
@@ -553,6 +592,12 @@ namespace NewGUI
 
                 SetUiForConnection(true);
                 UiLog($"Připojeno k {selectedPort}.");
+                try
+                {
+                    _serialController.WriteLine($"?type=INIT&api={ApiVersion}");
+                    UiLog($"Odesláno:{Environment.NewLine}?type=INIT&api={ApiVersion}");
+                }
+                catch { }
                 UpdateRequestFromUi();
             }
             catch (Exception ex)
@@ -812,6 +857,7 @@ namespace NewGUI
 
         private async Task SendLoopAsync(System.Threading.CancellationToken ct)
         {
+            int loopCounter = 0;
             while (!ct.IsCancellationRequested &&
                    _serialController.IsOpen &&
                    isSendingRequest)
@@ -819,10 +865,17 @@ namespace NewGUI
                 int delay = GetTimerIntervalMs();
                 try
                 {
-                    await Task.Delay(delay, ct);
                     if (ct.IsCancellationRequested) break;
 
                     _serialController.WriteLine(request);
+
+                    loopCounter++;
+                    if (loopCounter <= 3 || loopCounter % 10 == 0)
+                    {
+                        UiLog($"Odesláno: {request}");
+                    }
+
+                    await Task.Delay(delay, ct);
                 }
                 catch (OperationCanceledException)
                 {
@@ -854,20 +907,28 @@ namespace NewGUI
         {
             _lastInitPayload = e.Payload;
             _awaitingInitResponse = false;
-
+            string full = string.IsNullOrWhiteSpace(e.Payload) ? "?type=INIT&status=1" : $"?type=INIT&{e.Payload}";
+            UiLog($"Přijato:{Environment.NewLine}{full}");
+            try
+            {
+                _initBuffer.AppendLine($"Přijato: {full}");
+                if (_initForm != null && !_initForm.IsDisposed)
+                    _initForm.AppendLine($"Přijato: {full}");
+            }
+            catch { }
         }
 
         private void Parser_DataFrameReceived(object sender, DataFrameEventArgs e)
         {
             _chartManager.ParseAndEnqueue(e.Line);
-            LogLink(e.Line);
+            LogLink($"Přijato: {e.Line}");
             // first frame -> allow reset
             MarkResetAvailableFromData();
         }
 
         private void Parser_RawLineReceived(object sender, RawLineEventArgs e)
         {
-            LogLink(e.Line);
+            LogLink($"Přijato: {e.Line}");
         }
 
         //----------------------------------------------------------------------
@@ -907,7 +968,22 @@ namespace NewGUI
                 string jsonPath = Path.Combine(Application.StartupPath, "Senzory.json");
                 if (!File.Exists(jsonPath))
                 {
-                    MessageBox.Show("Soubor Senzory.json nebyl nalezen v " + Application.StartupPath + ".");
+                    string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                    string alt = Path.Combine(baseDir, "Senzory.json");
+                    if (File.Exists(alt)) jsonPath = alt;
+                    else
+                    {
+                        string proj = Path.Combine(@"D:\GitHub\Aplikace PC EduHub - old version\NewGUI", "Senzory.json");
+                        if (File.Exists(proj)) jsonPath = proj;
+                        else
+                        {
+                            string rel = Path.Combine(@"D:\GitHub\Aplikace PC EduHub - old version\NewGUI\bin\Release", "Senzory.json");
+                            if (File.Exists(rel)) jsonPath = rel;
+                        }
+                    }
+                }
+                if (!File.Exists(jsonPath))
+                {
                     return;
                 }
 
@@ -920,7 +996,7 @@ namespace NewGUI
 
                 if (data == null || data.Count == 0)
                 {
-                    MessageBox.Show("Senzory.json je prázdný nebo ve špatném formátu.");
+                    Console.WriteLine("[DEBUG] Senzory.json je prázdný nebo ve špatném formátu.");
                     return;
                 }
 
@@ -942,12 +1018,17 @@ namespace NewGUI
                 }
 
                 comboBoxSensor.EndUpdate();
-                comboBoxSensor.SelectedIndex = -1;
+                if (comboBoxSensor.Items.Contains("DHT11"))
+                    comboBoxSensor.SelectedItem = "DHT11";
+                else if (comboBoxSensor.Items.Count > 0)
+                    comboBoxSensor.SelectedIndex = 0;
+                else
+                    comboBoxSensor.SelectedIndex = -1;
                 UpdateRequestFromUi();
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Chyba při načítání Senzory.json: " + ex.Message);
+                Console.WriteLine("[DEBUG] Chyba při načítání Senzory.json: " + ex);
             }
         }
 

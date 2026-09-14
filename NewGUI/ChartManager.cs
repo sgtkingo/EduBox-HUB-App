@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Drawing;
@@ -16,8 +16,19 @@ namespace NewGUI
         private readonly Action<string> _log;
         private readonly ConcurrentQueue<FrameData> _queue = new ConcurrentQueue<FrameData>();
         private readonly Timer _timer;
-        private readonly Random _rnd = new Random();
         private readonly int _maxPoints;
+
+        private static readonly Color[] SeriesPalette = new[]
+        {
+            Color.FromArgb(15, 108, 189),   // Vibrant Blue
+            Color.FromArgb(230, 81, 0),     // Vibrant Deep Orange
+            Color.FromArgb(46, 125, 50),    // Forest Green
+            Color.FromArgb(142, 36, 170),   // Vivid Purple
+            Color.FromArgb(198, 40, 40),    // Crimson Red
+            Color.FromArgb(0, 131, 143),    // Cyan / Teal
+            Color.FromArgb(216, 27, 96),    // Deep Pink
+            Color.FromArgb(55, 71, 79)      // Dark Slate
+        };
 
         private int _sampleCount = 0;
         private bool _disposed;
@@ -25,7 +36,6 @@ namespace NewGUI
         private readonly int _maxSamples;
         private bool _limitReached;
 
-        // NEW: full-history buffer for export (independent of visible rolling window)
         // index -> (seriesName -> value)
         private readonly SortedDictionary<int, Dictionary<string, double>> _history
             = new SortedDictionary<int, Dictionary<string, double>>();
@@ -60,7 +70,7 @@ namespace NewGUI
         public void Stop() { if (!_disposed) _timer.Stop(); }
 
         /// <summary>
-        /// Vynuluje graf pro nové měření: smaže pending data, řady (a tím i legendu), body a počítadlo vzorků.
+        /// Vynuluje graf pro nové měření: smaže pending data, řady, body a počítadlo vzorků.
         /// </summary>
         public void Reset()
         {
@@ -81,72 +91,90 @@ namespace NewGUI
             // vyčistit zobrazení hodnot
             try { _valueMgr?.UpdateValueText(string.Empty); } catch { }
 
-            // vyčistit graf (řady/bodové série) -> zmizí i legenda
+            void ClearChart()
+            {
+                try
+                {
+                    _chart.Series.Clear();
+                    if (_chart.ChartAreas.Count > 0)
+                    {
+                        var ca = _chart.ChartAreas[0];
+                        ca.AxisX.Minimum = 0;
+                        ca.AxisX.Maximum = 10;
+                        ca.AxisX.Interval = 1;
+                        ca.AxisY.Minimum = 0;
+                        ca.AxisY.Maximum = 100;
+                        ca.AxisY.Interval = 20;
+                    }
+                    _chart.Invalidate();
+                    _chart.Update();
+                }
+                catch { }
+            }
+
             try
             {
                 if (_chart.InvokeRequired)
                 {
-                    _chart.BeginInvoke((Action)(() =>
-                    {
-                        _chart.Series.Clear();
-                        _chart.Invalidate();
-                    }));
+                    _chart.BeginInvoke((Action)ClearChart);
                 }
                 else
                 {
-                    _chart.Series.Clear();
-                    _chart.Invalidate();
+                    ClearChart();
                 }
             }
             catch { }
         }
 
-        // Přidání rámce (už naparsovaných čísel) do fronty pro vykreslení
         public void Enqueue(FrameData frame)
         {
-            if (frame == null) return; // ochrana
-            _queue.Enqueue(frame); // thread-safe
+            if (frame == null) return;
+            _queue.Enqueue(frame);
         }
 
-        public void ParseAndEnqueue(string data) // Parsování surového textu a přidání do fronty
+        public void ParseAndEnqueue(string data)
         {
-            if (string.IsNullOrWhiteSpace(data)) return; // prázdné nic nedělá
-            if (_limitReached) return; // pokud byl překročen limit vzorků, nic nedělat
+            if (string.IsNullOrWhiteSpace(data)) return;
+            if (_limitReached) return;
 
-            string s = data.Trim(); // osekat mezery
-            s = s.TrimStart('\uFEFF'); // odstranit případný BOM (Byte Order Mark) značka pořadí bajtů
-            if (s.StartsWith("?")) s = s.Substring(1); // tolerovat prefix „?“ (jako v URL query)
+            string s = data.Trim();
+            s = s.TrimStart('\uFEFF');
+            if (s.StartsWith("?")) s = s.Substring(1);
 
-            // Rozdělit na dvojice klíč=hodnota (a=1&b=2 → {"a":"1","b":"2"})
-            var parameters = s.Split('&')
-                              .Select(part => part.Split('='))
-                              .Where(pair => pair.Length == 2)
-                              .ToDictionary(pair => pair[0], pair => pair[1]);
+            // Bezpečné parsování dvojic klíč=hodnota bez pádů na duplicitních klíčích
+            var parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var parts = s.Split(new[] { '&' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var part in parts)
+            {
+                var kv = part.Split(new[] { '=' }, 2);
+                if (kv.Length == 2)
+                {
+                    string k = kv[0].Trim();
+                    string v = kv[1].Trim();
+                    parameters[k] = v;
+                }
+            }
 
-            // Klíče, které se do grafu NEKRESLÍ (meta-informace)
+            // Klíče, které se do grafu nekreslí (meta-informace)
             var skipKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-             { "type", "id", "pin", "app", "version", "dbversion", "api", "status", "code" };
+            { "type", "id", "pin", "pins", "app", "version", "dbversion", "api", "status", "code", "error" };
 
-            // Filtrovat jen datové klíče (ostatní ignorovat)
             var dataForGraph = parameters
                 .Where(kvp => !skipKeys.Contains(kvp.Key))
                 .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
 
-            var numericPairs = new List<string>(); // Pro sestavení textového přehledu
-            var numericValues = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase); // Pro číselné hodnoty
+            var numericPairs = new List<string>();
+            var numericValues = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
 
-            // Pro každý datový klíč se pokusí o vytažení čísla (toleruje „3,14“ i „3.14“, vědecký zápis)
             foreach (var kvp in dataForGraph)
             {
-                string variableName = kvp.Key; // název veličiny
-                string raw = kvp.Value ?? string.Empty; // původní textová hodnota
+                string variableName = kvp.Key;
+                string raw = kvp.Value ?? string.Empty;
 
-                // Normalizace desetinné čárky: „3,14“ → „3.14“ (jen pokud není tečka)
                 string normalized = raw;
                 if (normalized.IndexOf(',') >= 0 && normalized.IndexOf('.') < 0)
                     normalized = normalized.Replace(',', '.');
 
-                // Regex najde první číslo v textu (podporuje znaménko, desetinnou tečku i exponent)
                 var m = System.Text.RegularExpressions.Regex.Match(
                             normalized, @"[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?");
 
@@ -157,42 +185,39 @@ namespace NewGUI
                     System.Globalization.CultureInfo.InvariantCulture,
                     out numericValue);
 
-                if (hasNumber) // Připraví textové „name=value“ a ulož číselnou hodnotu
+                if (hasNumber)
                 {
                     numericPairs.Add($"{variableName}={numericValue.ToString("G", System.Globalization.CultureInfo.InvariantCulture)}");
                     numericValues[variableName] = numericValue;
                 }
                 else
                 {
-                    // Nebylo číslo – jen zalogujeme původní text
                     _log?.Invoke($"{variableName}: {raw}");
                 }
             }
-            // Pokud máme aspoň jednu číselnou hodnotu, vytvoříme FrameData a pošleme do fronty
+
             if (numericValues.Count > 0)
             {
-                var text = string.Join(", ", numericPairs); // textový přehled
-                int idx = System.Threading.Interlocked.Increment(ref _sampleCount); // atomicky zvýší index vzorku
-                var frame = new FrameData(idx, numericValues, text); // balíček dat
-                _queue.Enqueue(frame); // zařadit ke kreslení
+                var text = string.Join(", ", numericPairs);
+                int idx = System.Threading.Interlocked.Increment(ref _sampleCount);
+                var frame = new FrameData(idx, numericValues, text);
+                _queue.Enqueue(frame);
             }
         }
 
-        // Tik timeru – přesune všechno z fronty do grafu a aktualizuje UI
         private void Timer_Tick(object sender, EventArgs e)
         {
-            if (_disposed) return; // nic nedělat, pokud už jsou zlikvidované
-            if (_limitReached) return; // pokud byl překročen limit vzorků, nic nedělat
+            if (_disposed) return;
+            if (_limitReached) return;
 
-            bool any = false; // indikátor, zda se něco přidalo
-            FrameData last = null; // poslední zpracovaný rámec
+            bool any = false;
+            FrameData last = null;
 
-            while (_queue.TryDequeue(out var frame)) // Vytahat všechny čekající rámce z fronty
+            while (_queue.TryDequeue(out var frame))
             {
                 last = frame;
                 any = true;
 
-                // store full history for export
                 lock (_historyLock)
                 {
                     if (!_history.TryGetValue(frame.Index, out var row))
@@ -204,30 +229,40 @@ namespace NewGUI
                         row[kv.Key] = kv.Value;
                 }
 
-                foreach (var kv in frame.Values) // Pro každou veličinu v rámci
+                foreach (var kv in frame.Values)
                 {
-                    var variableName = kv.Key; // název řady/veličiny
-                    var numericValue = kv.Value; // její hodnota
+                    var variableName = kv.Key;
+                    var numericValue = kv.Value;
 
-                    if (_chart.Series.IsUniqueName(variableName)) // Pokud pro tuto veličinu ještě neexistuje Series, vytvoříme ji
+                    if (_chart.Series.IsUniqueName(variableName))
                     {
+                        int colorIdx = _chart.Series.Count % SeriesPalette.Length;
+                        var color = SeriesPalette[colorIdx];
+
                         var s = new Series(variableName)
                         {
-                            ChartType = SeriesChartType.Line, // kreslit čáru
-                            BorderWidth = 2, // tloušťka
-                            Color = Color.FromArgb(_rnd.Next(256), _rnd.Next(256), _rnd.Next(256)) // náhodná barva
+                            ChartType = SeriesChartType.Line,
+                            BorderWidth = 2,
+                            Color = color,
+                            MarkerStyle = MarkerStyle.Circle,
+                            MarkerSize = 6,
+                            MarkerColor = Color.White,
+                            MarkerBorderColor = color,
+                            MarkerBorderWidth = 2,
+                            ChartArea = _chart.ChartAreas.Count > 0 ? _chart.ChartAreas[0].Name : "ChartArea1",
+                            Legend = _chart.Legends.Count > 0 ? _chart.Legends[0].Name : "Legend1",
+                            IsVisibleInLegend = true
                         };
                         _chart.Series.Add(s);
                     }
 
-                    var series = _chart.Series[variableName]; // Vezmi existující řadu
+                    var series = _chart.Series[variableName];
 
-                    if (series.Points.Count > _maxPoints) series.Points.RemoveAt(0); // Udržovat maximální počet bodů: když je jich moc, odstraň nejstarší
+                    if (series.Points.Count > _maxPoints) series.Points.RemoveAt(0);
 
-                    series.Points.AddXY(frame.Index, numericValue); // Přidat nový bod: X = index vzorku, Y = hodnota
+                    series.Points.AddXY(frame.Index, numericValue);
                 }
 
-                // enforce max samples using the frame index (=sample counter)
                 if (frame.Index >= _maxSamples)
                 {
                     _limitReached = true;
@@ -236,55 +271,85 @@ namespace NewGUI
                     break;
                 }
             }
-            // Pokud jsme něco zpracovali – zaktualizuj osy, UI a překresli graf
+
             if (any)
             {
-                // Graf musí mít ChartArea (pro jistotu)
-                if (_chart.ChartAreas.Count == 0)
-                    _chart.ChartAreas.Add(new ChartArea());
-
+                EnsureChartArea();
                 var ca = _chart.ChartAreas[0];
 
-                // Osa X: používej poslední index rámce (po Reset() začne zase od 1)
-                int lastIndex = (last != null) ? last.Index : _sampleCount;
-                ca.AxisX.Minimum = Math.Max(0, lastIndex - 10);
-                ca.AxisX.Maximum = lastIndex;
-                ca.RecalculateAxesScale(); // přepočti měřítko (zejména Y)
+                // Popisky os bez uvozovek
+                ca.AxisX.Title = "Počet vzorků";
+                ca.AxisX.TitleFont = new Font("Segoe UI Variable Text", 9F, FontStyle.Regular);
+                ca.AxisX.TitleForeColor = Color.FromArgb(90, 90, 95);
+                ca.AxisY.Title = "Hodnota";
+                ca.AxisY.TitleFont = new Font("Segoe UI Variable Text", 9F, FontStyle.Regular);
+                ca.AxisY.TitleForeColor = Color.FromArgb(90, 90, 95);
 
-                // Do UI panelu s hodnotami pošli text posledního rámce (pokud existuje ValueDisplayManager)
+                // Plynulé posouvání okna X osy
+                int lastIndex = (last != null) ? last.Index : _sampleCount;
+                if (lastIndex <= 10)
+                {
+                    ca.AxisX.Minimum = 0;
+                    ca.AxisX.Maximum = 10;
+                    ca.AxisX.Interval = 1;
+                }
+                else
+                {
+                    ca.AxisX.Minimum = lastIndex - 10;
+                    ca.AxisX.Maximum = lastIndex;
+                    ca.AxisX.Interval = 2;
+                }
+
+                // Bezpečný přepočet Y osy (dynamický rozsah dle dat)
+                ca.AxisY.Minimum = double.NaN;
+                ca.AxisY.Maximum = double.NaN;
+                ca.RecalculateAxesScale();
+                if (!double.IsNaN(ca.AxisY.Minimum) && !double.IsNaN(ca.AxisY.Maximum))
+                {
+                    if (Math.Abs(ca.AxisY.Maximum - ca.AxisY.Minimum) < 0.0001)
+                    {
+                        double mid = ca.AxisY.Minimum;
+                        ca.AxisY.Minimum = mid - 1.0;
+                        ca.AxisY.Maximum = mid + 1.0;
+                    }
+                }
+
                 if (last != null && _valueMgr != null)
                 {
                     _valueMgr.UpdateValueText(last.ValueText);
                 }
-                // Vyžádat překreslení grafu
+
                 _chart.Invalidate();
+                _chart.Update();
             }
         }
-        // Ujisti se, že graf má aspoň jednu ChartArea (jinak nejde kreslit)
+
         private void EnsureChartArea()
         {
             if (_chart.ChartAreas.Count == 0)
-                _chart.ChartAreas.Add(new ChartArea());
+            {
+                var ca = new ChartArea("ChartArea1");
+                ca.BackColor = Color.White;
+                ca.BorderWidth = 0;
+                ca.AxisX.Title = "Počet vzorků";
+                ca.AxisY.Title = "Hodnota";
+                _chart.ChartAreas.Add(ca);
+            }
         }
-        // Uklid při likvidaci – odpojit timer a uvolnit zdroje
+
         public void Dispose()
         {
             if (_disposed) return;
             _disposed = true;
-            try { _timer.Tick -= Timer_Tick; } catch { } // odhlásit handler
-            try { _timer.Stop(); } catch { } // zastavit
-            try { _timer.Dispose(); } catch { } // uvolnit
+            try { _timer.Tick -= Timer_Tick; } catch { }
+            try { _timer.Stop(); } catch { }
+            try { _timer.Dispose(); } catch { }
         }
 
-        /// <summary>
-        /// Exportuje všechna naměřená data (z interní historie, ne jen viditelné okno v grafu) do CSV.
-        /// Format: Sample;Series1;Series2;...
-        /// </summary>
         public string ExportCsv(char separator = ';', bool forceText = false, bool decimalComma = true)
         {
             if (_disposed) return string.Empty;
 
-            // capture snapshot to avoid holding lock during formatting
             SortedDictionary<int, Dictionary<string, double>> snapshot;
             HashSet<string> allSeries;
             lock (_historyLock)
@@ -337,7 +402,6 @@ namespace NewGUI
 
         private static string ToExcelText(string value)
         {
-            // ForceText mode disabled: return raw value (caller still formats decimal comma if requested).
             return value ?? string.Empty;
         }
 
@@ -346,7 +410,6 @@ namespace NewGUI
             if (value == null) return string.Empty;
             bool mustQuote = value.IndexOf(separator) >= 0 || value.IndexOf('"') >= 0 || value.IndexOf('\n') >= 0 || value.IndexOf('\r') >= 0;
             if (!mustQuote) return value;
-            // CSV escaping: double inner quotes
             return "\"" + value.Replace("\"", "\"\"") + "\"";
         }
     }

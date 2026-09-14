@@ -112,6 +112,7 @@
       <DependentUpon>Aktuatory.cs</DependentUpon>
     </Compile>
     <Compile Include="ChartManager.cs" />
+    <Compile Include="VirtualDeviceSimulator.cs" />
     <Compile Include="Documentation.cs">
       <SubType>UserControl</SubType>
     </Compile>

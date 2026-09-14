@@ -1,7 +1,8 @@
-﻿using System;
+using System;
 using System.IO.Ports;
 using System.Text;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace NewGUI
 {
@@ -24,6 +25,11 @@ namespace NewGUI
 
         public event EventHandler<LinesEventArgs> LinesReceived; // Událost, kterou vyšleme, když máme k dispozici celé řádky textu
 
+        // Simulator mode support
+        private bool _isSimulated = false;
+        private bool _simulatedOpen = false;
+        private string _simulatedPortName = "COM22";
+
         // Konstruktor
         public SerialManager()
         {
@@ -33,9 +39,10 @@ namespace NewGUI
             _port.NewLine = "\r\n"; // Výchozí znak pro konec řádku
         }
 
-        public bool IsOpen => _port.IsOpen; //Jen pro čtení: zda je port otevřený
-        public string PortName => _port.PortName; //Aktuální jméno portu
-        public int BaudRate => _port.BaudRate; // Aktuální rychlost
+        public bool IsOpen => _isSimulated ? _simulatedOpen : _port.IsOpen; //Jen pro čtení: zda je port otevřený
+        public string PortName => _isSimulated ? (_simulatedPortName ?? "COM22") : _port.PortName; //Aktuální jméno portu
+        public int BaudRate => _isSimulated ? 115200 : _port.BaudRate; // Aktuální rychlost
+        public bool IsSimulated => _isSimulated;
 
         public void ConfigurePort( // Nastaví parametry portu (název, rychlost, paritu, stop bity, handshake…)
             string portName,
@@ -49,19 +56,41 @@ namespace NewGUI
             // Změnu nelze provést, pokud je port otevřený
             if (IsOpen) throw new InvalidOperationException("Nejdřív zavři port (Close), pak měň konfiguraci.");
 
-            // Uložení všech nastavení do objektu SerialPort
-            _port.PortName = portName;
-            _port.BaudRate = baudRate;
-            _port.Parity = parity;
-            _port.DataBits = dataBits;
-            _port.StopBits = stopBits;
-            _port.Handshake = handshake;
-            _port.NewLine = newLine;
+            _isSimulated = string.IsNullOrWhiteSpace(portName) ||
+                           string.Equals(portName, "COM22", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(portName, "SIMULATOR", StringComparison.OrdinalIgnoreCase) ||
+                           portName.IndexOf("SIMULAT", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                           string.Equals(portName, "SIMULACE", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(portName, "VIRTUAL", StringComparison.OrdinalIgnoreCase);
+
+            if (!_isSimulated)
+            {
+                // Uložení všech nastavení do objektu SerialPort
+                _port.PortName = portName;
+                _port.BaudRate = baudRate;
+                _port.Parity = parity;
+                _port.DataBits = dataBits;
+                _port.StopBits = stopBits;
+                _port.Handshake = handshake;
+                _port.NewLine = newLine;
+            }
+            else
+            {
+                _simulatedPortName = string.IsNullOrWhiteSpace(portName) ? "COM22" : portName;
+                _port.NewLine = newLine;
+            }
         }
 
         // Otevře port a připojí náš interní handler (pokud ještě není připojen)
         public void Open()
         {
+            if (_isSimulated)
+            {
+                _simulatedOpen = true;
+                VirtualDeviceSimulator.Instance.ResetState();
+                return;
+            }
+
             if (!IsOpen) _port.Open(); // Fyzicky otevře COM port
 
             // ensure our internal handler is attached once
@@ -74,6 +103,12 @@ namespace NewGUI
 
         public void Close() //Zavře port, odpojí všechny handlery a uklidí
         {
+            if (_isSimulated)
+            {
+                _simulatedOpen = false;
+                return;
+            }
+
             try
             {
                 DetachReceiver(); // Odpojíme případného externího „receivera“
@@ -114,6 +149,21 @@ namespace NewGUI
         public void WriteLine(string line)
         {
             if (!IsOpen) throw new InvalidOperationException("Port není otevřen.");
+
+            if (_isSimulated)
+            {
+                Task.Run(async () =>
+                {
+                    await Task.Delay(15);
+                    string response = VirtualDeviceSimulator.Instance.ProcessCommand(line);
+                    if (!string.IsNullOrEmpty(response))
+                    {
+                        LinesReceived?.Invoke(this, new LinesEventArgs(new[] { response }));
+                    }
+                });
+                return;
+            }
+
             lock (_ioLock) _port.WriteLine(line);  // Zámek pro bezpečné paralelní použití
         }
 

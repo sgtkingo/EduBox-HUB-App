@@ -22,7 +22,7 @@ namespace NewGUI
 
             if (m.Equals("INIT", StringComparison.OrdinalIgnoreCase))
             {
-                return "?type=INIT&api=1.0";
+                return "?type=INIT&api=1.4";
             }
 
             if (m.Equals("CONNECT", StringComparison.OrdinalIgnoreCase) || m.Equals("DISCONNECT", StringComparison.OrdinalIgnoreCase))

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Drawing;
@@ -48,6 +48,7 @@ namespace NewGUI
             comPortWatcherTimer.Interval = 500;
             comPortWatcherTimer.Tick += ComPortWatcherTimer_Tick;
             comPortWatcherTimer.Start();
+            ComPortWatcherTimer_Tick(null, EventArgs.Empty);
 
             // skrytí textboxů a labelů
             textBox1.Visible = false;
@@ -92,6 +93,10 @@ namespace NewGUI
         private void ComPortWatcherTimer_Tick(object sender, EventArgs e)
         {
             var currentPorts = SerialPort.GetPortNames().ToList();
+            if (!currentPorts.Contains("COM22", StringComparer.OrdinalIgnoreCase))
+            {
+                currentPorts.Insert(0, "COM22");
+            }
             if (!currentPorts.SequenceEqual(lastKnownPorts))
             {
                 string selected = ComBox.SelectedItem as string;
@@ -102,9 +107,11 @@ namespace NewGUI
                 {
                     ComBox.SelectedItem = selected;
                 }
-                else if (currentPorts.Count > 0)
+                else
                 {
-                    ComBox.SelectedIndex = 0;
+                    ComBox.SelectedItem = "COM22";
+                    if (ComBox.SelectedIndex < 0 && ComBox.Items.Count > 0)
+                        ComBox.SelectedIndex = 0;
                 }
                 lastKnownPorts = currentPorts;
             }
@@ -129,10 +136,25 @@ namespace NewGUI
         {
             try
             {
-                string jsonPath = Path.Combine(Application.StartupPath,"Aktuatory.json");
+                string jsonPath = Path.Combine(Application.StartupPath, "Aktuatory.json");
                 if (!File.Exists(jsonPath))
                 {
-                    MessageBox.Show($"Soubor aktuatory.json nebyl nalezen ve složce projektu: {BasePath}");
+                    string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                    string alt = Path.Combine(baseDir, "Aktuatory.json");
+                    if (File.Exists(alt)) jsonPath = alt;
+                    else
+                    {
+                        string proj = Path.Combine(@"D:\GitHub\Aplikace PC EduHub - old version\NewGUI", "Aktuatory.json");
+                        if (File.Exists(proj)) jsonPath = proj;
+                        else
+                        {
+                            string rel = Path.Combine(@"D:\GitHub\Aplikace PC EduHub - old version\NewGUI\bin\Release", "Aktuatory.json");
+                            if (File.Exists(rel)) jsonPath = rel;
+                        }
+                    }
+                }
+                if (!File.Exists(jsonPath))
+                {
                     return;
                 }
 
@@ -160,7 +182,7 @@ namespace NewGUI
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Chyba při načítání JSON: {ex.Message}");
+                Console.WriteLine($"Chyba při načítání JSON: {ex.Message}");
             }
         }
         // Získá „zobrazovací alias“ – priorita: Alias (type) → Alias → Znackeni
@@ -243,6 +265,7 @@ namespace NewGUI
                     // SerialManager.Instance.AttachExclusiveReceiver(Aktuatory_DataReceived);
 
                     _serialController.Open();
+                    try { _serialController.WriteLine("?type=INIT&api=1.4"); } catch { }
 
                     btnConnect.Text = "Odpojit";
                     SetControlButtonsEnabled(true);

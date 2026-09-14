@@ -1,4 +1,4 @@
-using System;
+ï»¿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -24,8 +24,8 @@ namespace NewGUI
     }
 
     /// <summary>
-    /// SerialParser: rozpozná typ øádky (INIT seznam / mìøicí rámec / ostatní) a vyvolá patøièné události.
-    /// UI potom mùe reagovat na události místo ruèního volání IsInitLine/ParseAndDisplayData.
+    /// SerialParser: rozpoznÃ¡ typ Å™Ã¡dky (INIT seznam / mÄ›Å™icÃ­ rÃ¡mec / ostatnÃ­) a vyvolÃ¡ patÅ™iÄnÃ© udÃ¡losti.
+    /// UI potom mÅ¯Å¾e reagovat na udÃ¡losti mÃ­sto ruÄnÃ­ho volÃ¡nÃ­ IsInitLine/ParseAndDisplayData.
     /// </summary>
     public class SerialParser
     {
@@ -46,7 +46,9 @@ namespace NewGUI
                 return;
             }
 
-            if (line.StartsWith("?id=", StringComparison.OrdinalIgnoreCase))
+            // DatovÃ½ rÃ¡mec: Å™Ã¡dka zaÄÃ­najÃ­cÃ­ "?id=" nebo obsahujÃ­cÃ­ query parametr "id=" s daty
+            if (line.StartsWith("?id=", StringComparison.OrdinalIgnoreCase) ||
+                (line.StartsWith("?") && line.IndexOf("id=", StringComparison.OrdinalIgnoreCase) >= 0))
             {
                 DataFrameReceived?.Invoke(this, new DataFrameEventArgs(line));
                 return;
@@ -60,7 +62,7 @@ namespace NewGUI
             payload = null;
             if (string.IsNullOrWhiteSpace(line)) return false;
 
-            // èistı "id:type,id:type"
+            // ÄistÃ© "id:type,id:type"
             if (!line.StartsWith("?") && line.Contains(":") && line.Contains(","))
             {
                 payload = line.Trim();
@@ -79,7 +81,7 @@ namespace NewGUI
         }
 
         /// <summary>
-        /// Pomocná utilita: rozparsuje query string (s nebo bez poèáteèního '?') do slovníku.
+        /// PomocnÃ¡ utilita: rozparsuje query string (s nebo bez poÄÃ¡teÄnÃ­ho '?') do slovnÃ­ku.
         /// </summary>
         public static Dictionary<string, string> ParseQuery(string query)
         {
@@ -94,8 +96,8 @@ namespace NewGUI
                 var kv = p.Split(new[] { '=' }, 2);
                 if (kv.Length == 2)
                 {
-                    var key = Uri.UnescapeDataString(kv[0]);
-                    var val = Uri.UnescapeDataString(kv[1]);
+                    var key = Uri.UnescapeDataString(kv[0].Trim());
+                    var val = Uri.UnescapeDataString(kv[1].Trim());
                     dict[key] = val;
                 }
             }
