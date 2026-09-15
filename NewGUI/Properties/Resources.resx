@@ -169,6 +169,9 @@
   <data name="MTA_Mini" type="System.Resources.ResXFileRef, System.Windows.Forms">
     <value>..\Resources\MTA_Mini.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
   </data>
+  <data name="EduBoxHubAppLogo" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\EduBoxHubAppLogo.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
   <data name="HOME_Click" type="System.Resources.ResXFileRef, System.Windows.Forms">
     <value>..\Resources\HOME_Click.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
   </data>

@@ -283,6 +283,13 @@ namespace NewGUI.Properties {
         /// <summary>
         ///   Vyhledává lokalizovaný prostředek typu System.Drawing.Bitmap.
         /// </summary>
+        internal static System.Drawing.Bitmap EduBoxHubAppLogo {
+            get {
+                object obj = ResourceManager.GetObject("EduBoxHubAppLogo", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
         internal static System.Drawing.Bitmap MTA_Mini {
             get {
                 object obj = ResourceManager.GetObject("MTA_Mini", resourceCulture);

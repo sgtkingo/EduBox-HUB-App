@@ -1,5 +1,7 @@
 # EduBox HUB App
 
+![Logo EduBox HUB App](assets/logo.svg)
+
 **EduBox HUB App** je desktopová větev ekosystému
 [EduBox HUB](https://github.com/sgtkingo/EduBox-HUB). Umožňuje ve Windows
 připojovat senzory a aktuátory, zobrazovat jejich data, ovládat výstupy a

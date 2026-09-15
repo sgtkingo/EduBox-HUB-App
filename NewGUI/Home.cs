@@ -43,6 +43,60 @@ namespace NewGUI
                 hover:  Properties.Resources.half_brain_mini4,
                 detail: "Virtuální prostředí pro simulaci senzorů.",
                 onActivate: (_, __) => _rodic.NahraditObsah(new Simulator(_rodic)));
+
+            var introPanel = new Panel
+            {
+                Name = "HomeIntroPanel",
+                Dock = DockStyle.Bottom,
+                Size = new Size(800, 148),
+                BackColor = Color.White
+            };
+
+            var accentLine = new Panel
+            {
+                Dock = DockStyle.Top,
+                Height = 3,
+                BackColor = Color.FromArgb(235, 98, 9)
+            };
+            introPanel.Controls.Add(accentLine);
+
+            var welcomeLabel = new Label
+            {
+                Name = "HomeWelcomeLabel",
+                Text = "Vítejte v EduBox HUB App",
+                Font = new Font("Segoe UI", 20F, FontStyle.Bold),
+                ForeColor = Color.FromArgb(5, 93, 169),
+                Location = new Point(24, 20),
+                Size = new Size(510, 40)
+            };
+            introPanel.Controls.Add(welcomeLabel);
+
+            var descriptionLabel = new Label
+            {
+                Name = "HomeDescriptionLabel",
+                Text = "Připojte senzory a aktuátory, sledujte jejich data a ovládejte výstupy. Pro experimenty bez hardwaru použijte Simulator.",
+                Font = new Font("Segoe UI", 11F),
+                ForeColor = Color.FromArgb(39, 59, 77),
+                Location = new Point(24, 68),
+                Size = new Size(500, 62)
+            };
+            introPanel.Controls.Add(descriptionLabel);
+
+            var appLogo = new PictureBox
+            {
+                Name = "EduBoxHubAppLogo",
+                AccessibleName = "Logo EduBox HUB App",
+                Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
+                BackColor = Color.White,
+                Image = Properties.Resources.EduBoxHubAppLogo,
+                SizeMode = PictureBoxSizeMode.Zoom,
+                Size = new Size(235, 65),
+                Location = new Point(549, 68),
+                TabStop = false
+            };
+            introPanel.Controls.Add(appLogo);
+            Controls.Add(introPanel);
+            introPanel.BringToFront();
         }
 
         public void AddTile(Panel host, string title, Image normal, Image hover, string detail, EventHandler onActivate)

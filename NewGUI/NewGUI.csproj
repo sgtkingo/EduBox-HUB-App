@@ -461,6 +461,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\MTA_Mini.png" />
+    <None Include="Resources\EduBoxHubAppLogo.png" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\HOME.png" />

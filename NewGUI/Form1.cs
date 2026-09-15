@@ -41,6 +41,7 @@ namespace NewGUI
             AttachWipeAnimation(help_button, Properties.Resources.help_click, hostPanel: help_panel);
             AttachWipeAnimation(info_button, Properties.Resources.info2_click, hostPanel: info_panel);
 
+            NahraditObsah(new Home(this));
 
         }
 
