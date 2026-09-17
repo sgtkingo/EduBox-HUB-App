@@ -2,8 +2,10 @@
 
 ## Změny
 
-- Aktualizace komunikace na VSCP API 1.5 v senzorech, aktuátorech a simulátoru.
+- Aktualizace komunikace na VSCP API 1.6 podle knihovny 2.2.2 v senzorech, aktuátorech a simulátoru.
 - Podpora obousměrného PING i před INIT; kontrola role, sekvence a timeoutu.
+- Odpověď na PING neobsahuje `type`; páruje se pomocí `side` a `seq`.
+- BYE ukončuje pouze komunikační relaci a čekající ping. Piny zůstávají připojené; další běžné příkazy vyžadují INIT.
 
 - Automatické sestavení Windows x64 aplikace pomocí GitHub Actions.
 - Automatické verzování a vydávání ZIP balíčku podle prefixu commitu.

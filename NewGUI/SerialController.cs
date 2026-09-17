@@ -23,6 +23,11 @@ namespace NewGUI
             _parser.RawLineReceived += OnParserRawLineReceived;  // Když parser zahlásí surový øádek
         }
 
+        public event EventHandler PeerDisconnected;
+        public bool SessionClosed => SerialManager.Instance.SessionClosed;
+        public void Bye() => SerialManager.Instance.Bye();
+        private void OnPeerDisconnected(object sender, EventArgs e) => PeerDisconnected?.Invoke(this, e);
+
         public bool IsOpen => SerialManager.Instance.IsOpen; // Vlastnost, která øekne, jestli je port otevøený
         
         // Nastavení sériového portu (název portu, rychlost, bity, parita atd.)
@@ -70,6 +75,7 @@ namespace NewGUI
             {
                 // Pøihlásíme se na událost, která doruèuje nové øádky
                 SerialManager.Instance.LinesReceived += OnLinesReceived;
+                SerialManager.Instance.PeerDisconnected += OnPeerDisconnected;
                 _attached = true; // Oznaèíme, že už jsme pøipojeni
             }
             catch { } // Chyby ignorujeme (napø. SerialManager ještì není inicializovaný)
@@ -80,7 +86,8 @@ namespace NewGUI
             if (!_attached) return; // Pokud není pøipojeno, není co dìlat
             try
             {
-                SerialManager.Instance.LinesReceived -= OnLinesReceived; // Odhlásíme se z události
+                SerialManager.Instance.LinesReceived -= OnLinesReceived;
+                SerialManager.Instance.PeerDisconnected -= OnPeerDisconnected; // Odhlásíme se z události
             }
             catch { } // Ignorujeme pøípadné chyby
             _attached = false; // Oznaèíme, že už nejsme pøipojeni

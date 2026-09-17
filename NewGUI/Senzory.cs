@@ -81,6 +81,17 @@ namespace NewGUI
             // serial controller must exist before UI queries IsOpen
             _serialController = new SerialController();
             _serialController.InitReceived += Parser_InitReceived;
+            _serialController.PeerDisconnected += (_, e) =>
+            {
+                if (!IsDisposed && IsHandleCreated) BeginInvoke((Action)(() =>
+                {
+                    StopSendingRequest();
+                    SetUiForConnection(false);
+                    comboBoxCOM.Enabled = false;
+                    ConnectBtn.Text = "Obnovit";
+                    UiLog("Device closed the session (BYE).");
+                }));
+            };
             _serialController.DataFrameReceived += Parser_DataFrameReceived;
             _serialController.RawLineReceived += Parser_RawLineReceived;
 
@@ -548,6 +559,16 @@ namespace NewGUI
 
         private void ConnectBtn_Click(object sender, EventArgs e)
         {
+            if (_serialController.IsOpen && _serialController.SessionClosed)
+            {
+                try
+                {
+                    _serialController.WriteLine(VscpProtocol.InitRequest);
+                    SetUiForConnection(true);
+                }
+                catch (Exception ex) { MessageBox.Show($"Chyba obnovení relace: {ex.Message}"); }
+                return;
+            }
             if (_serialController.IsOpen)
             {
                 try
@@ -859,7 +880,7 @@ namespace NewGUI
         {
             int loopCounter = 0;
             while (!ct.IsCancellationRequested &&
-                   _serialController.IsOpen &&
+                   _serialController.IsOpen && !_serialController.SessionClosed &&
                    isSendingRequest)
             {
                 int delay = GetTimerIntervalMs();

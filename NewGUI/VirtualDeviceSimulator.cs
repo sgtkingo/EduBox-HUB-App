@@ -22,6 +22,7 @@ namespace NewGUI
 
         private readonly Random _rnd = new Random();
         private int _step = 0;
+        public bool IsInitialized { get; private set; }
         private List<Komponenty> _sensors = new List<Komponenty>();
         private readonly HashSet<string> _connectedSensors = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -75,6 +76,14 @@ namespace NewGUI
             type = type?.Trim().ToUpperInvariant() ?? string.Empty;
             id = id?.Trim() ?? string.Empty;
 
+            if (type == "BYE")
+            {
+                if (VscpProtocol.IsBye(command, "client")) IsInitialized = false;
+                return string.Empty;
+            }
+            if (!query.ContainsKey("type") && query.ContainsKey("side") && query.ContainsKey("seq") && query.ContainsKey("status"))
+                return string.Empty;
+
             if (type == "PING")
             {
                 if (query.ContainsKey("status") ||
@@ -86,8 +95,10 @@ namespace NewGUI
             // 1. INIT handshake
             if (type == "INIT")
             {
+                IsInitialized = false;
                 if (!query.TryGetValue("api", out var api) || api != VscpProtocol.ApiVersion)
                     return "?type=INIT&status=0&error=API mismatch";
+                IsInitialized = true;
                 _step = 0;
                 var sensorTokens = new List<string>();
                 if (_sensors != null && _sensors.Count > 0)
@@ -107,6 +118,8 @@ namespace NewGUI
                 string payload = string.Join(",", sensorTokens.Take(12));
                 return $"?type=INIT&api={VscpProtocol.ApiVersion}&status=1&{payload}";
             }
+
+            if (!IsInitialized) return "?status=0&error=Protocol not initialized";
 
             // 2. CONNECT
             if (type == "CONNECT")
@@ -158,6 +171,7 @@ namespace NewGUI
 
         public void ResetState()
         {
+            IsInitialized = false;
             _step = 0;
             _connectedSensors.Clear();
         }

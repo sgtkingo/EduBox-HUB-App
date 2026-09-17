@@ -3,6 +3,7 @@ using System.IO.Ports;
 using System.Text;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Threading;
 
 namespace NewGUI
 {
@@ -24,6 +25,24 @@ namespace NewGUI
         private bool _internalHandlerAttached = false; // hlídá, že se nepřipojí víckrát
 
         private readonly VscpPingEndpoint _ping = new VscpPingEndpoint();
+        private volatile bool _sessionClosed, _initialized, _initPending;
+        private int _generation;
+        public bool SessionClosed => _sessionClosed;
+        public bool IsInitialized => _initialized;
+        public event EventHandler PeerDisconnected;
+
+        private void EndSession()
+        {
+            _sessionClosed = true;
+            _initialized = _initPending = false;
+            Interlocked.Increment(ref _generation);
+            _ping.Reset();
+        }
+
+        public void Bye()
+        {
+            WriteLine(VscpProtocol.ByeRequest);
+        }
 
         public Task<bool> PingAsync(int timeoutMs = 500)
         {
@@ -35,7 +54,28 @@ namespace NewGUI
         {
             var applicationLines = new List<string>();
             foreach (var line in lines)
-                if (!_ping.HandleFrame(line, WriteLine)) applicationLines.Add(line);
+            {
+                if (VscpProtocol.IsBye(line, "server"))
+                {
+                    bool notify = !_sessionClosed;
+                    EndSession();
+                    applicationLines.Clear();
+                    if (notify) PeerDisconnected?.Invoke(this, EventArgs.Empty);
+                    continue;
+                }
+                var fields = SerialParser.ParseQuery(line);
+                if (fields.TryGetValue("type", out var type) && type.Equals("BYE", StringComparison.OrdinalIgnoreCase)) continue;
+                if (_ping.HandleFrame(line, WriteLine)) continue;
+                if (_initPending && fields.TryGetValue("status", out var status) &&
+                    !fields.ContainsKey("id") && (status == "0" ||
+                    fields.TryGetValue("api", out var api) && api == VscpProtocol.ApiVersion))
+                {
+                    _initPending = false;
+                    _initialized = status == "1";
+                    if (_initialized) _sessionClosed = false;
+                }
+                if (!_sessionClosed) applicationLines.Add(line);
+            }
             if (applicationLines.Count > 0)
                 LinesReceived?.Invoke(this, new LinesEventArgs(applicationLines.ToArray()));
         }
@@ -101,6 +141,9 @@ namespace NewGUI
         // Otevře port a připojí náš interní handler (pokud ještě není připojen)
         public void Open()
         {
+            if (IsOpen) return;
+            _sessionClosed = _initialized = _initPending = false;
+            Interlocked.Increment(ref _generation);
             if (_isSimulated)
             {
                 _simulatedOpen = true;
@@ -120,7 +163,8 @@ namespace NewGUI
 
         public void Close() //Zavře port, odpojí všechny handlery a uklidí
         {
-            _ping.Reset();
+            if (IsOpen && !_sessionClosed) { try { Bye(); } catch { } }
+            EndSession();
             if (_isSimulated)
             {
                 _simulatedOpen = false;
@@ -166,26 +210,38 @@ namespace NewGUI
         // Pošle řádek textu (automaticky přidá konec řádku)
         public void WriteLine(string line)
         {
-            if (!IsOpen) throw new InvalidOperationException("Port není otevřen.");
+            if (!IsOpen) throw new InvalidOperationException("Port is not open.");
+            var fields = SerialParser.ParseQuery(line);
+            fields.TryGetValue("type", out var type);
+            bool init = string.Equals(type, "INIT", StringComparison.OrdinalIgnoreCase);
+            bool bye = VscpProtocol.IsBye(line, "client");
+            bool ping = string.Equals(type, "PING", StringComparison.OrdinalIgnoreCase) ||
+                        !fields.ContainsKey("type") && fields.ContainsKey("side") && fields.ContainsKey("seq") && fields.ContainsKey("status");
+            if (_sessionClosed && !init && !bye && !ping)
+                throw new InvalidOperationException("Session closed; send INIT before device commands.");
 
-            if (_isSimulated)
+            string response = null;
+            int generation;
+            lock (_ioLock)
             {
+                if (init) { _initPending = true; _initialized = false; Interlocked.Increment(ref _generation); }
+                try
+                {
+                    if (_isSimulated) response = VirtualDeviceSimulator.Instance.ProcessCommand(line);
+                    else _port.WriteLine(line);
+                }
+                catch { if (init) _initPending = false; throw; }
+                if (bye) EndSession();
+                generation = _generation;
+            }
+            if (_isSimulated && !string.IsNullOrEmpty(response))
                 Task.Run(async () =>
                 {
                     await Task.Delay(15);
-                    string response = VirtualDeviceSimulator.Instance.ProcessCommand(line);
-                    if (!string.IsNullOrEmpty(response))
-                    {
-                        DispatchLines(new[] { response });
-                    }
+                    if (IsOpen && generation == _generation) DispatchLines(new[] { response });
                 });
-                return;
-            }
-
-            lock (_ioLock) _port.WriteLine(line);  // Zámek pro bezpečné paralelní použití
         }
 
-        
         // Pošle text beze změny (bez přidání konce řádku)
         public void Write(string text)
         {

@@ -36,10 +36,19 @@ Alternativní uživatelské rozhraní poskytuje
 
 ## Technologie a spuštění
 
-Komunikace používá **VSCP API 1.5**, včetně odpovědí na PING zařízení i před
+Komunikace používá **VSCP API 1.6** podle knihovny **2.2.2**, včetně odpovědí na PING zařízení i před
 INIT. `SerialController.PingAsync(timeoutMs)` umožňuje ověřit dostupnost
 protistrany; vrátí `true` při správné odpovědi a `false` při timeoutu nebo
 uzavření spojení. Pravidelný heartbeat se automaticky nespouští.
+
+Požadavek PING obsahuje `type=PING`, odpověď pouze `side`, `seq` a `status=1`.
+`SerialController.Bye()` oznámí ukončení relace bez čekání na odpověď; BYE se
+automaticky odešle také při zavírání portu. Přijaté BYE ukončí relaci a čekající
+ping, zastaví komunikaci v UI a vyvolá událost `PeerDisconnected`. Port zůstává
+otevřený a piny připojené; běžné příkazy vyžadují nový INIT. Stejně se chová
+integrovaný simulátor.
+
+Protokolové a integrační testy: `python tests/run_tests.py` (lokální Visual Studio Build Tools).
 
 Aplikace je vytvořena v C# jako Windows Forms projekt pro **.NET Framework
 4.7.2**.

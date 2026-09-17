@@ -76,6 +76,15 @@ namespace NewGUI
             _serialController.RawLineReceived += (_, e) => AppendLineToMainTextBox(e.Line);
             _serialController.DataFrameReceived += (_, e) => AppendLineToMainTextBox(e.Line); // pokud chceš i datové rámce
             _serialController.InitReceived += (_, e) => AppendLineToMainTextBox(e.Payload);
+            _serialController.PeerDisconnected += (_, e) =>
+            {
+                if (!IsDisposed && IsHandleCreated) BeginInvoke((Action)(() =>
+                {
+                    SetControlButtonsEnabled(false);
+                    badgeConn.Text = "BYE";
+                    UpdateStartEnabled_Actuators();
+                }));
+            };
 
             _resetQuietTimer = new Timer { Interval = 3000 };
             _resetQuietTimer.Tick += (s, e) => { _suppressAfterReset = false; _resetQuietTimer.Stop(); };
@@ -673,7 +682,7 @@ namespace NewGUI
         // Povolení Start – hlídá vyžadované piny 1–4
         private void UpdateStartEnabled_Actuators()
         {
-            bool connected = _serialController.IsOpen;
+            bool connected = _serialController.IsOpen && !_serialController.SessionClosed;
             bool hasMode = !string.IsNullOrWhiteSpace(ModBox.Text);
             bool hasAct = AktBox.SelectedItem != null;
 
