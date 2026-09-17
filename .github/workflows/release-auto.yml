@@ -1,0 +1,153 @@
+name: Release Auto
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: Version component to increment.
+        type: choice
+        options: [build, patch, minor, major]
+        default: build
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-auto-main
+  cancel-in-progress: false
+
+jobs:
+  prepare-release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: windows-2022
+    outputs:
+      release: ${{ steps.gate.outputs.release }}
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      build_ref: ${{ steps.commit.outputs.build_ref }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout triggering revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Decide release from commit prefix
+        id: gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_BUMP: ${{ inputs.bump_type }}
+        run: |
+          $bump = 'none'
+          if ($env:EVENT_NAME -eq 'workflow_dispatch') {
+            $bump = $env:MANUAL_BUMP
+          } else {
+            $message = (git log -1 --pretty=%B) -join "`n"
+            if ($message -match '^\((major|minor|patch|build)\)') { $bump = $Matches[1] }
+          }
+          "bump=$bump" >> $env:GITHUB_OUTPUT
+          "release=$($bump -ne 'none')".ToLowerInvariant() >> $env:GITHUB_OUTPUT
+
+      - name: Validate release notes
+        if: steps.gate.outputs.release == 'true'
+        run: |
+          if (!(Test-Path 'RELEASE_NOTES.md') -or !(Get-Content 'RELEASE_NOTES.md' -Raw).Trim()) {
+            throw 'RELEASE_NOTES.md must exist and contain release notes.'
+          }
+
+      - name: Increment version and sync assembly metadata
+        if: steps.gate.outputs.release == 'true'
+        id: version
+        env:
+          BUMP: ${{ steps.gate.outputs.bump }}
+        run: ./.github/scripts/version.ps1 -Bump $env:BUMP
+
+      - name: Prepare version commit
+        if: steps.gate.outputs.release == 'true'
+        id: commit
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git show-ref --verify --quiet "refs/tags/$env:TAG"
+          if ($LASTEXITCODE -eq 0) { throw "Tag $env:TAG already exists." }
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add VERSION NewGUI/Properties/AssemblyInfo.cs
+          git commit -m "chore(release): bump version to $env:VERSION"
+          if ($LASTEXITCODE -ne 0) { throw 'Version commit failed.' }
+          "build_ref=$(git rev-parse HEAD)" >> $env:GITHUB_OUTPUT
+          # Pass the prepared commit to the build without changing main before success.
+          git bundle create release-source.bundle HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Source bundle creation failed.' }
+
+      - name: Upload prepared source
+        if: steps.gate.outputs.release == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-source
+          path: release-source.bundle
+          retention-days: 1
+
+  build:
+    if: needs.prepare-release.outputs.release == 'true'
+    needs: prepare-release
+    uses: ./.github/workflows/build.yml
+    with:
+      ref: ${{ github.sha }}
+      artifact_name: app-${{ needs.prepare-release.outputs.version }}
+      prepared_ref: ${{ needs.prepare-release.outputs.build_ref }}
+
+  publish-release:
+    needs: [prepare-release, build]
+    runs-on: windows-2022
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download prepared source
+        uses: actions/download-artifact@v4
+        with:
+          name: release-source
+          path: source
+
+      - name: Download application
+        uses: actions/download-artifact@v4
+        with:
+          name: app-${{ needs.prepare-release.outputs.version }}
+          path: release-assets
+
+      - name: Push tested version commit and tag
+        env:
+          BUILD_REF: ${{ needs.prepare-release.outputs.build_ref }}
+          TAG: ${{ needs.prepare-release.outputs.tag }}
+        run: |
+          git fetch source/release-source.bundle HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Source fetch failed.' }
+          git checkout --detach $env:BUILD_REF
+          if ($LASTEXITCODE -ne 0) { throw 'Source checkout failed.' }
+          git tag $env:TAG $env:BUILD_REF
+          if ($LASTEXITCODE -ne 0) { throw 'Tag creation failed.' }
+          # Reject a concurrent main update rather than overwriting it.
+          git push --atomic origin HEAD:refs/heads/main "refs/tags/$env:TAG"
+          if ($LASTEXITCODE -ne 0) { throw 'Release push failed; main may have advanced or be protected.' }
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare-release.outputs.tag }}
+          name: ${{ needs.prepare-release.outputs.tag }}
+          body_path: RELEASE_NOTES.md
+          files: release-assets/*.zip
+          fail_on_unmatched_files: true

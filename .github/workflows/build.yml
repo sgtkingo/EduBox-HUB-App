@@ -1,0 +1,106 @@
+name: Build App
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Git revision to build.
+        type: string
+        default: ''
+      artifact_name:
+        description: Uploaded artifact name.
+        type: string
+        default: app-windows-x64
+      prepared_ref:
+        description: Commit from the release-source artifact (release workflow only).
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+
+      - name: Download prepared release source
+        if: inputs.prepared_ref != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: release-source
+          path: source
+
+      - name: Checkout prepared release commit
+        if: inputs.prepared_ref != ''
+        env:
+          PREPARED_REF: ${{ inputs.prepared_ref }}
+        run: |
+          git fetch source/release-source.bundle HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Source fetch failed.' }
+          git checkout --detach $env:PREPARED_REF
+          if ($LASTEXITCODE -ne 0) { throw 'Source checkout failed.' }
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Sync assembly version
+        id: version
+        run: ./.github/scripts/version.ps1
+
+      - name: Restore NuGet packages
+        run: |
+          nuget restore NewGUI.sln -NonInteractive
+          if ($LASTEXITCODE -ne 0) { throw 'NuGet restore failed.' }
+
+      - name: Build Release for Windows x64
+        run: |
+          msbuild NewGUI.sln /m /t:Rebuild /p:Configuration=Release '/p:Platform=Any CPU' /p:PlatformTarget=x64 /p:Prefer32Bit=false /p:SignManifests=false
+          if ($LASTEXITCODE -ne 0) { throw 'MSBuild failed.' }
+
+      - name: Package portable application
+        env:
+          APP_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $package = 'dist/package'
+          # Preserve the directory depth used by the existing documentation paths.
+          $app = "$package/NewGUI/bin/Release"
+          New-Item -ItemType Directory -Path $app -Force | Out-Null
+          Copy-Item 'NewGUI/bin/Release/*' $app -Recurse -Force
+          foreach ($file in 'NewGUI.exe', 'NewGUI.exe.config', 'Senzory.json', 'Aktuatory.json', 'x64/pdfium.dll') {
+            if (!(Test-Path "$app/$file")) { throw "Missing runtime file: $file" }
+          }
+          Copy-Item '*.pdf' $package
+          Copy-Item 'README.md', 'RELEASE_NOTES.md', 'VERSION' $package
+          foreach ($folder in 'Senzory', 'Aktuátory', 'Vysvětlivky') {
+            Copy-Item $folder $package -Recurse
+          }
+          if (Test-Path 'NewGUI/Manualy') { Copy-Item 'NewGUI/Manualy' "$package/NewGUI" -Recurse }
+          New-Item -ItemType Directory -Path "$package/NewGUI/Docs" -Force | Out-Null
+          Copy-Item 'Dokumentace_senzory_EduBox.pdf' "$package/NewGUI/Docs"
+          Copy-Item 'NewGUI/Aktuatory_ikony' "$package/Aktuátory_ikony" -Recurse
+          Copy-Item 'NewGUI/Senzory_ikony' "$package/Senzory_ikony" -Recurse
+          Set-Content "$package/Spustit.cmd" '@echo off', 'start "" /D "%~dp0NewGUI\bin\Release" "%~dp0NewGUI\bin\Release\NewGUI.exe"' -Encoding ascii
+          Compress-Archive -Path "$package/*" -DestinationPath "dist/EduBox-HUB-App-$env:APP_VERSION-windows-x64.zip"
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact_name || 'app-windows-x64' }}
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 14
