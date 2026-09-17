@@ -75,9 +75,19 @@ namespace NewGUI
             type = type?.Trim().ToUpperInvariant() ?? string.Empty;
             id = id?.Trim() ?? string.Empty;
 
+            if (type == "PING")
+            {
+                if (query.ContainsKey("status") ||
+                    !VscpProtocol.TryReadPing(command, out var side, out var sequence) || side != "client")
+                    return string.Empty;
+                return VscpProtocol.PingFrame("server", sequence, true);
+            }
+
             // 1. INIT handshake
             if (type == "INIT")
             {
+                if (!query.TryGetValue("api", out var api) || api != VscpProtocol.ApiVersion)
+                    return "?type=INIT&status=0&error=API mismatch";
                 _step = 0;
                 var sensorTokens = new List<string>();
                 if (_sensors != null && _sensors.Count > 0)
@@ -95,7 +105,7 @@ namespace NewGUI
                 }
 
                 string payload = string.Join(",", sensorTokens.Take(12));
-                return $"?type=INIT&api=1.4&status=1&{payload}";
+                return $"?type=INIT&api={VscpProtocol.ApiVersion}&status=1&{payload}";
             }
 
             // 2. CONNECT

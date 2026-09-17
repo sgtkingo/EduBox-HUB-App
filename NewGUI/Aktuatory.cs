@@ -265,7 +265,7 @@ namespace NewGUI
                     // SerialManager.Instance.AttachExclusiveReceiver(Aktuatory_DataReceived);
 
                     _serialController.Open();
-                    try { _serialController.WriteLine("?type=INIT&api=1.4"); } catch { }
+                    try { _serialController.WriteLine(VscpProtocol.InitRequest); } catch { }
 
                     btnConnect.Text = "Odpojit";
                     SetControlButtonsEnabled(true);

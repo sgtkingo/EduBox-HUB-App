@@ -73,6 +73,9 @@ jobs:
           msbuild NewGUI.sln /m /t:Rebuild /p:Configuration=Release '/p:Platform=Any CPU' /p:PlatformTarget=x64 /p:Prefer32Bit=false /p:SignManifests=false
           if ($LASTEXITCODE -ne 0) { throw 'MSBuild failed.' }
 
+      - name: Verify VSCP protocol
+        run: ./.github/scripts/test-vscp.ps1
+
       - name: Package portable application
         env:
           APP_VERSION: ${{ steps.version.outputs.version }}

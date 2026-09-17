@@ -58,6 +58,11 @@ namespace NewGUI
             SerialManager.Instance.WriteLine(line);
         }
 
+        public System.Threading.Tasks.Task<bool> PingAsync(int timeoutMs = 500)
+        {
+            return SerialManager.Instance.PingAsync(timeoutMs);
+        }
+
         private void AttachIfNeeded() // Pøipojí handler na SerialManager.Instance.LinesReceived, pokud ještì není
         {
             if (_attached) return; // Pokud už je pøipojeno, nic nedìláme

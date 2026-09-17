@@ -154,6 +154,7 @@
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RequestBuilder.cs" />
+    <Compile Include="VscpProtocol.cs" />
     <Compile Include="Senzory.cs">
       <SubType>UserControl</SubType>
     </Compile>

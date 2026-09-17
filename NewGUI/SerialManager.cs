@@ -23,6 +23,23 @@ namespace NewGUI
         private readonly SerialDataReceivedEventHandler _internalDataReceivedHandler;  // Interní handler, který zpracovává data (používáme vlastní, ne přímo port.DataReceived)
         private bool _internalHandlerAttached = false; // hlídá, že se nepřipojí víckrát
 
+        private readonly VscpPingEndpoint _ping = new VscpPingEndpoint();
+
+        public Task<bool> PingAsync(int timeoutMs = 500)
+        {
+            if (!IsOpen) throw new InvalidOperationException("Port is not open.");
+            return _ping.PingAsync(WriteLine, timeoutMs);
+        }
+
+        private void DispatchLines(string[] lines)
+        {
+            var applicationLines = new List<string>();
+            foreach (var line in lines)
+                if (!_ping.HandleFrame(line, WriteLine)) applicationLines.Add(line);
+            if (applicationLines.Count > 0)
+                LinesReceived?.Invoke(this, new LinesEventArgs(applicationLines.ToArray()));
+        }
+
         public event EventHandler<LinesEventArgs> LinesReceived; // Událost, kterou vyšleme, když máme k dispozici celé řádky textu
 
         // Simulator mode support
@@ -103,6 +120,7 @@ namespace NewGUI
 
         public void Close() //Zavře port, odpojí všechny handlery a uklidí
         {
+            _ping.Reset();
             if (_isSimulated)
             {
                 _simulatedOpen = false;
@@ -158,7 +176,7 @@ namespace NewGUI
                     string response = VirtualDeviceSimulator.Instance.ProcessCommand(line);
                     if (!string.IsNullOrEmpty(response))
                     {
-                        LinesReceived?.Invoke(this, new LinesEventArgs(new[] { response }));
+                        DispatchLines(new[] { response });
                     }
                 });
                 return;
@@ -233,7 +251,7 @@ namespace NewGUI
                     try
                     {
                         // Vyvolá se událost LinesReceived – předají se všechny celé řádky
-                        LinesReceived?.Invoke(this, new LinesEventArgs(completeLines.ToArray()));
+                        DispatchLines(completeLines.ToArray());
                     }
                     catch { /* subscriber exceptions should not crash serial thread */ }
                     // Když si posluchač udělá chybu, neshodí nám to celé vlákno

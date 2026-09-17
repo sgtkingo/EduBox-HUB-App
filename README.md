@@ -36,6 +36,11 @@ Alternativní uživatelské rozhraní poskytuje
 
 ## Technologie a spuštění
 
+Komunikace používá **VSCP API 1.5**, včetně odpovědí na PING zařízení i před
+INIT. `SerialController.PingAsync(timeoutMs)` umožňuje ověřit dostupnost
+protistrany; vrátí `true` při správné odpovědi a `false` při timeoutu nebo
+uzavření spojení. Pravidelný heartbeat se automaticky nespouští.
+
 Aplikace je vytvořena v C# jako Windows Forms projekt pro **.NET Framework
 4.7.2**.
 
