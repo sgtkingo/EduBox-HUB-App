@@ -992,16 +992,6 @@ namespace NewGUI
                     string baseDir = AppDomain.CurrentDomain.BaseDirectory;
                     string alt = Path.Combine(baseDir, "Senzory.json");
                     if (File.Exists(alt)) jsonPath = alt;
-                    else
-                    {
-                        string proj = Path.Combine(@"D:\GitHub\Aplikace PC EduHub - old version\NewGUI", "Senzory.json");
-                        if (File.Exists(proj)) jsonPath = proj;
-                        else
-                        {
-                            string rel = Path.Combine(@"D:\GitHub\Aplikace PC EduHub - old version\NewGUI\bin\Release", "Senzory.json");
-                            if (File.Exists(rel)) jsonPath = rel;
-                        }
-                    }
                 }
                 if (!File.Exists(jsonPath))
                 {
