@@ -81,15 +81,16 @@ namespace NewGUI
                 if (VscpProtocol.IsBye(command, "client")) IsInitialized = false;
                 return string.Empty;
             }
-            if (!query.ContainsKey("type") && query.ContainsKey("side") && query.ContainsKey("seq") && query.ContainsKey("status"))
+            if (!query.ContainsKey("type") && query.ContainsKey("seq") && query.ContainsKey("status") &&
+                (query.Count == 2 || query.Count == 3 && query.ContainsKey("side")))
                 return string.Empty;
 
             if (type == "PING")
             {
                 if (query.ContainsKey("status") ||
-                    !VscpProtocol.TryReadPing(command, out var side, out var sequence) || side != "client")
+                    !VscpProtocol.TryReadPing(command, out var side, out var sequence) || side == "server")
                     return string.Empty;
-                return VscpProtocol.PingFrame("server", sequence, true);
+                return VscpProtocol.PingFrame(side == null ? null : "server", sequence, true);
             }
 
             // 1. INIT handshake

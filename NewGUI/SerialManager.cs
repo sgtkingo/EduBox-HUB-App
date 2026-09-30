@@ -216,7 +216,8 @@ namespace NewGUI
             bool init = string.Equals(type, "INIT", StringComparison.OrdinalIgnoreCase);
             bool bye = VscpProtocol.IsBye(line, "client");
             bool ping = string.Equals(type, "PING", StringComparison.OrdinalIgnoreCase) ||
-                        !fields.ContainsKey("type") && fields.ContainsKey("side") && fields.ContainsKey("seq") && fields.ContainsKey("status");
+                        !fields.ContainsKey("type") && fields.ContainsKey("seq") && fields.ContainsKey("status") &&
+                        (fields.Count == 2 || fields.Count == 3 && fields.ContainsKey("side"));
             if (_sessionClosed && !init && !bye && !ping)
                 throw new InvalidOperationException("Session closed; send INIT before device commands.");
 

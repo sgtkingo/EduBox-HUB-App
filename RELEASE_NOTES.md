@@ -1,14 +1,24 @@
 # EduBox HUB App – poznámky k vydání
 
+## Minor vydání – kompatibilita s Boardem
+
+- Aplikace odpovídá na PING Boardu ve tvaru `?type=PING&seq=N` rámcem
+  `?seq=N&status=1`, takže Board může průběžně ověřovat aktivní spojení.
+- PING spuštěný z aplikace přijímá odpověď Boardu bez parametru `side`.
+  Dosavadní rámce se `side` zůstávají podporované.
+- Synchronizována verze VSCP API 1.7 a knihovny 2.3.0. Doplněny testovací
+  scénáře pro obě podoby PINGu a chování po ukončení relace.
+
 ## Komunikace a VSCP
 
-- Senzory, aktuátory a integrovaný simulátor používají **VSCP API 1.6** podle
-  protokolové knihovny 2.2.2. Verze API je definována na jednom místě.
+- Senzory, aktuátory a integrovaný simulátor používají **VSCP API 1.7** podle
+  protokolové knihovny 2.3.0. Verze API je definována na jednom místě.
 - Obousměrný **PING** ověřuje dostupnost protistrany i před INIT. Aplikace
   odpovídá na požadavky zařízení a umožňuje vlastní kontrolu spojení přes
   `PingAsync`; kontroluje roli protistrany, sekvenci a timeout.
-- Požadavek PING obsahuje `type=PING`. Odpověď obsahuje pouze `side`, `seq`
-  a `status=1`; neobsahuje `type`. Chybné, nevyžádané a opožděné odpovědi
+- Požadavek PING obsahuje `type=PING` a `seq`. Odpověď Boardu obsahuje `seq`
+  a `status=1` bez `type`; u rámců se `side` jej odpověď zachovává.
+  Chybné, nevyžádané a opožděné odpovědi
   nepotvrzují čekající ping a PING rámce se nezpracovávají jako naměřená data.
 - **BYE** ukončuje komunikační relaci bez čekání na odpověď. Automaticky se
   odesílá při zavírání portu. Přijaté BYE ukončí relaci a čekající ping,
@@ -41,7 +51,7 @@ Požadavky: Windows x64 a .NET Framework 4.7.2 nebo novější kompatibilní ver
 
 ## Kompatibilita
 
-Protistrana musí podporovat VSCP API 1.6, zejména odpovědi na PING bez `type`
+Protistrana musí podporovat VSCP API 1.7, zejména odpovědi na PING bez `type`
 a ukončení relace pomocí BYE. Úspěšný PING potvrzuje dostupnost protistrany,
 nikoli dokončený INIT nebo funkčnost připojených senzorů. Pravidelný heartbeat
 ani automatické obnovení relace se nespouští.

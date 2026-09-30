@@ -7,8 +7,8 @@ namespace NewGUI
 {
     public static class VscpProtocol
     {
-        public const string ApiVersion = "1.6";
-        public const string LibraryVersion = "2.2.2";
+        public const string ApiVersion = "1.7";
+        public const string LibraryVersion = "2.3.0";
         public const string ByeRequest = "?type=BYE&side=client";
         public static bool IsBye(string line, string expectedSide)
         {
@@ -26,15 +26,17 @@ namespace NewGUI
             var fields = SerialParser.ParseQuery(line.Trim());
             bool typed = fields.TryGetValue("type", out var type);
             if (typed ? !type.Equals("PING", StringComparison.OrdinalIgnoreCase) || fields.ContainsKey("status")
-                      : !fields.ContainsKey("status") || !fields.ContainsKey("side") || !fields.ContainsKey("seq")) return false;
+                      : !fields.ContainsKey("status") || !fields.ContainsKey("seq")) return false;
             fields.TryGetValue("side", out side);
             return fields.TryGetValue("seq", out var seq) &&
                 uint.TryParse(seq, NumberStyles.None, CultureInfo.InvariantCulture, out sequence) && sequence != 0 &&
-                seq == sequence.ToString(CultureInfo.InvariantCulture) && (side == "client" || side == "server");
+                seq == sequence.ToString(CultureInfo.InvariantCulture) &&
+                (side == null || side == "client" || side == "server");
         }
         public static string PingFrame(string side, uint sequence, bool response = false)
         {
-            return (response ? "?side=" : "?type=PING&side=") + side + "&seq=" + sequence.ToString(CultureInfo.InvariantCulture) +
+            return (response ? "?" : "?type=PING&") + (side == null ? "" : "side=" + side + "&") +
+                "seq=" + sequence.ToString(CultureInfo.InvariantCulture) +
                 (response ? "&status=1" : string.Empty);
         }
     }
@@ -59,7 +61,7 @@ namespace NewGUI
             }
             try
             {
-                send(VscpProtocol.PingFrame("client", sequence));
+                send(VscpProtocol.PingFrame(null, sequence));
                 var completed = await Task.WhenAny(pending.Task, Task.Delay(timeoutMs)).ConfigureAwait(false);
                 return completed == pending.Task && await pending.Task.ConfigureAwait(false);
             }
@@ -70,12 +72,19 @@ namespace NewGUI
             var fields = SerialParser.ParseQuery(line);
             bool typed = fields.TryGetValue("type", out var type);
             bool request = typed && type.Equals("PING", StringComparison.OrdinalIgnoreCase);
-            bool response = !typed && fields.ContainsKey("side") && fields.ContainsKey("seq") && fields.ContainsKey("status");
+            bool sidedResponse = !typed && fields.ContainsKey("side") && fields.ContainsKey("seq") && fields.ContainsKey("status");
+            bool boardResponse = false;
+            if (!typed && fields.Count == 2 && fields.ContainsKey("seq") && fields.ContainsKey("status") &&
+                VscpProtocol.TryReadPing(line, out _, out var responseSequence))
+            {
+                lock (_sync) boardResponse = _pending != null && responseSequence == _sequence;
+            }
+            bool response = sidedResponse || boardResponse;
             if (!request && !response) return false;
             // Keep every PING frame out of ordinary device transactions.
-            if (!VscpProtocol.TryReadPing(line, out var side, out var sequence) || side != "server") return true;
-            if (!fields.TryGetValue("status", out var status)) send(VscpProtocol.PingFrame("client", sequence, true));
-            else if (status == "1")
+            if (!VscpProtocol.TryReadPing(line, out var side, out var sequence) || side == "client") return true;
+            if (request) send(VscpProtocol.PingFrame(side == null ? null : "client", sequence, true));
+            else if (fields.TryGetValue("status", out var status) && status == "1")
             {
                 lock (_sync)
                 {

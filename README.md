@@ -36,7 +36,7 @@ Alternativní uživatelské rozhraní poskytuje
 
 ## Technologie a spuštění
 
-Komunikace používá **VSCP API 1.6** podle knihovny **2.2.2**, včetně odpovědí na PING zařízení i před
+Komunikace používá **VSCP API 1.7** podle knihovny **2.3.0**, včetně odpovědí na PING zařízení i před
 INIT. `SerialController.PingAsync(timeoutMs)` umožňuje ověřit dostupnost
 protistrany; vrátí `true` při správné odpovědi a `false` při timeoutu nebo
 uzavření spojení. Pravidelný heartbeat se automaticky nespouští.

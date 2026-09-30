@@ -16,19 +16,23 @@ internal static class VscpProtocolTests
         var sent = new List<string>();
         Check(endpoint.HandleFrame("?seq=42&side=server&type=ping", sent.Add), "Reordered request");
         Check(sent.Count == 1 && sent[0] == "?side=client&seq=42&status=1", "Server-initiated PING");
+        Check(endpoint.HandleFrame("?type=PING&seq=43", sent.Add), "Board PING request");
+        Check(sent.Count == 2 && sent[1] == "?seq=43&status=1", "Board PING response");
         foreach (var frame in new[] {
             "?type=PING&side=server&seq=0", "?type=PING&side=server&seq=01",
             "?type=PING&side=server&seq=4294967296", "?type=PING&side=server&seq=-1",
             "?type=PING&side=server&seq=1.0", "?type=PING&side=client&seq=1",
-            "?type=PING&seq=1", "?type=PING&side=server&seq=1&status=1",
+            "?type=PING&seq=", "?type=PING&side=server&seq=1&status=1",
             "?type=PING&side=server&seq=1&status=0", "?type=PING&side=server&seq=1&status=" })
             Check(endpoint.HandleFrame(frame, sent.Add), "Consume invalid or unsolicited frame");
-        Check(sent.Count == 1, "Never answer invalid requests or responses");
+        Check(sent.Count == 2, "Never answer invalid requests or responses");
         Check(!endpoint.HandleFrame("?id=S01&status=1&temperature=23.5", sent.Add), "Ordinary data passthrough");
+        Check(!endpoint.HandleFrame("?seq=999&status=1", sent.Add), "Unrelated sequence response passthrough");
 
         var ping = endpoint.PingAsync(sent.Add, 500);
         var request = SerialParser.ParseQuery(sent[sent.Count - 1]);
         var seq = request["seq"];
+        Check(sent[sent.Count - 1] == "?type=PING&seq=" + seq, "Board-compatible outgoing PING");
         Check(!ping.IsCompleted, "Wait for acknowledgment");
         endpoint.HandleFrame("?side=client&seq=" + seq + "&status=1", sent.Add);
         endpoint.HandleFrame("?side=server&seq=999&status=1", sent.Add);
@@ -36,8 +40,12 @@ internal static class VscpProtocolTests
         Check(!ping.IsCompleted, "Ignore wrong role, sequence and failure");
         endpoint.HandleFrame("?type=PING&side=server&seq=77", sent.Add);
         Check(!ping.IsCompleted && sent[sent.Count - 1].Contains("seq=77&status=1"), "Service simultaneous request");
-        endpoint.HandleFrame("?status=1&seq=" + seq + "&side=server", sent.Add);
-        Check(await ping, "Matching acknowledgment");
+        Check(endpoint.HandleFrame("?status=1&seq=" + seq, sent.Add), "Board acknowledgment consumed");
+        Check(await ping, "Matching Board acknowledgment");
+        ping = endpoint.PingAsync(sent.Add, 500);
+        seq = SerialParser.ParseQuery(sent[sent.Count - 1])["seq"];
+        Check(endpoint.HandleFrame("?status=1&seq=" + seq + "&side=server", sent.Add), "Sided acknowledgment consumed");
+        Check(await ping, "Matching sided acknowledgment");
         Check(!await endpoint.PingAsync(sent.Add, 20), "Timeout");
         var expiredSeq = SerialParser.ParseQuery(sent[sent.Count - 1])["seq"];
         ping = endpoint.PingAsync(sent.Add, 500);
@@ -51,14 +59,16 @@ internal static class VscpProtocolTests
         endpoint.Reset();
         Check(!await ping, "Write failure releases pending slot");
 
-        Check(RequestBuilder.BuildRequest("INIT", null, null, null, null, null, null) == "?type=INIT&api=1.6", "INIT version");
+        Check(RequestBuilder.BuildRequest("INIT", null, null, null, null, null, null) == "?type=INIT&api=1.7", "INIT version");
         var simulator = new VirtualDeviceSimulator();
+        Check(simulator.ProcessCommand("?type=PING&seq=7") == "?seq=7&status=1", "Simulator handles Board-format PING");
+        Check(simulator.ProcessCommand("?seq=7&status=1") == "", "Simulator consumes Board-format acknowledgment");
         Check(simulator.ProcessCommand("?seq=4294967295&type=PING&side=client") ==
             "?side=server&seq=4294967295&status=1", "Simulator PING before INIT");
         Check(simulator.ProcessCommand("?type=PING&side=client&seq=1&status=1") == "", "Simulator ignores responses");
         Check(simulator.ProcessCommand("?type=INIT&api=1.4").Contains("status=0"), "Simulator rejects obsolete API");
-        Check(simulator.ProcessCommand(VscpProtocol.InitRequest).Contains("api=1.6&status=1"), "Simulator INIT 1.6");
-        Check(VscpProtocol.LibraryVersion == "2.2.2", "VSCP library version");
+        Check(simulator.ProcessCommand(VscpProtocol.InitRequest).Contains("api=1.7&status=1"), "Simulator INIT 1.7");
+        Check(VscpProtocol.LibraryVersion == "2.3.0", "VSCP library version");
         Check(simulator.ProcessCommand("?type=BYE&side=server") == "" && simulator.IsInitialized, "Wrong role BYE");
         Check(simulator.ProcessCommand(VscpProtocol.ByeRequest) == "" && !simulator.IsInitialized, "Simulator BYE closes session");
         Check(simulator.ProcessCommand("?type=UPDATE&id=S01").Contains("Protocol not initialized"), "INIT required after BYE");
@@ -79,11 +89,16 @@ internal static class VscpProtocolTests
         manager.PeerDisconnected += (_, e) => ++byeEvents;
         var pending = manager.PingAsync();
         var dispatch = typeof(SerialManager).GetMethod("DispatchLines", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        int beforeBoardPing = dataCount;
+        dispatch.Invoke(manager, new object[] { new[] { "?type=PING&seq=81" } });
+        Check(dataCount == beforeBoardPing, "Board PING does not reach data listeners");
         dispatch.Invoke(manager, new object[] { new[] { "?type=BYE&side=server" } });
         Check(!await pending && manager.SessionClosed && !manager.IsInitialized && manager.IsOpen, "Peer BYE cancels ping, keeps port open");
         int beforeBye = dataCount;
         dispatch.Invoke(manager, new object[] { new[] { "?type=BYE&side=server", "?id=S01&status=1" } });
         Check(byeEvents == 1 && dataCount == beforeBye, "Duplicate BYE and stale data are consumed");
+        dispatch.Invoke(manager, new object[] { new[] { "?type=PING&seq=82" } });
+        Check(dataCount == beforeBye, "Board PING is answered after session close");
         try { manager.WriteLine("?type=UPDATE&id=S01"); throw new Exception("Missing session guard"); }
         catch (InvalidOperationException) { }
         Check(await manager.PingAsync(), "PING remains available on closed session");
@@ -93,7 +108,7 @@ internal static class VscpProtocolTests
         manager.Bye();
         Check(manager.SessionClosed && !VirtualDeviceSimulator.Instance.IsInitialized, "Local BYE reaches simulator without reply");
         manager.Close();
-        Console.WriteLine("VSCP 1.6 protocol checks passed.");
+        Console.WriteLine("VSCP 1.7 protocol checks passed.");
     }
 
     public static int Main()
