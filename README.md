@@ -41,7 +41,9 @@ INIT. `SerialController.PingAsync(timeoutMs)` umožňuje ověřit dostupnost
 protistrany; vrátí `true` při správné odpovědi a `false` při timeoutu nebo
 uzavření spojení. Pravidelný heartbeat se automaticky nespouští.
 
-Požadavek PING obsahuje `type=PING`, odpověď pouze `side`, `seq` a `status=1`.
+App posílá při každém INIT explicitně `hold=0`, takže Board vypne serverové
+PINGy i časový dohled nečinné relace. Požadavek PING obsahuje
+`type=PING`; odpověď Boardu obsahuje `seq` a `status=1` bez `type`.
 `SerialController.Bye()` oznámí ukončení relace bez čekání na odpověď; BYE se
 automaticky odešle také při zavírání portu. Přijaté BYE ukončí relaci a čekající
 ping, zastaví komunikaci v UI a vyvolá událost `PeerDisconnected`. Port zůstává

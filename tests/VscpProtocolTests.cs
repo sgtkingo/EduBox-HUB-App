@@ -59,7 +59,8 @@ internal static class VscpProtocolTests
         endpoint.Reset();
         Check(!await ping, "Write failure releases pending slot");
 
-        Check(RequestBuilder.BuildRequest("INIT", null, null, null, null, null, null) == "?type=INIT&api=1.7", "INIT version");
+        Check(RequestBuilder.BuildRequest("INIT", null, null, null, null, null, null) ==
+            "?type=INIT&api=1.7&hold=0", "App INIT always disables server hold");
         var simulator = new VirtualDeviceSimulator();
         Check(simulator.ProcessCommand("?type=PING&seq=7") == "?seq=7&status=1", "Simulator handles Board-format PING");
         Check(simulator.ProcessCommand("?seq=7&status=1") == "", "Simulator consumes Board-format acknowledgment");
@@ -68,6 +69,13 @@ internal static class VscpProtocolTests
         Check(simulator.ProcessCommand("?type=PING&side=client&seq=1&status=1") == "", "Simulator ignores responses");
         Check(simulator.ProcessCommand("?type=INIT&api=1.4").Contains("status=0"), "Simulator rejects obsolete API");
         Check(simulator.ProcessCommand(VscpProtocol.InitRequest).Contains("api=1.7&status=1"), "Simulator INIT 1.7");
+        Check(!simulator.HoldEnabled, "App INIT sets simulator hold=0");
+        Check(simulator.ProcessCommand("?type=INIT&api=1.7&hold=1").Contains("status=1") &&
+            simulator.HoldEnabled, "Simulator accepts hold=1");
+        Check(simulator.ProcessCommand("?type=INIT&api=1.7&hold=bad").Contains("status=0"),
+            "Simulator rejects invalid hold");
+        Check(simulator.ProcessCommand(VscpProtocol.InitRequest).Contains("status=1") &&
+            !simulator.HoldEnabled, "Simulator restores App default hold=0");
         Check(VscpProtocol.LibraryVersion == "2.3.0", "VSCP library version");
         Check(simulator.ProcessCommand("?type=BYE&side=server") == "" && simulator.IsInitialized, "Wrong role BYE");
         Check(simulator.ProcessCommand(VscpProtocol.ByeRequest) == "" && !simulator.IsInitialized, "Simulator BYE closes session");

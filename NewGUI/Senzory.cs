@@ -55,7 +55,6 @@ namespace NewGUI
         private ChartManager _chartManager;
         private ImageManager _imageManager; // NEW: replace old image-loading method
 
-        private const string ApiVersion = VscpProtocol.ApiVersion;
         private Timer _resetHoldTimer;
         private bool _suppressNextResetClick = false;
 
@@ -615,8 +614,8 @@ namespace NewGUI
                 UiLog($"Připojeno k {selectedPort}.");
                 try
                 {
-                    _serialController.WriteLine($"?type=INIT&api={ApiVersion}");
-                    UiLog($"Odesláno:{Environment.NewLine}?type=INIT&api={ApiVersion}");
+                    _serialController.WriteLine(VscpProtocol.InitRequest);
+                    UiLog($"Odesláno:{Environment.NewLine}{VscpProtocol.InitRequest}");
                 }
                 catch { }
                 UpdateRequestFromUi();
@@ -1069,7 +1068,7 @@ namespace NewGUI
         private void init_btn_Click(object sender, EventArgs e)
         {
             // Literal request as requested by user
-            string req = $"?type=INIT&api={ApiVersion}";
+            string req = VscpProtocol.InitRequest;
 
 
             try

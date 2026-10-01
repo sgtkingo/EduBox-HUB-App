@@ -17,7 +17,8 @@ namespace NewGUI
             return fields.TryGetValue("type", out var type) && type.Equals("BYE", StringComparison.OrdinalIgnoreCase) &&
                 fields.TryGetValue("side", out var side) && side == expectedSide && !fields.ContainsKey("status");
         }
-        public const string InitRequest = "?type=INIT&api=" + ApiVersion;
+        public const string InitRequest = "?type=INIT&api=" + ApiVersion + "&hold=0";
+        public static string BuildInitRequest() => InitRequest;
         public static bool TryReadPing(string line, out string side, out uint sequence)
         {
             side = null;

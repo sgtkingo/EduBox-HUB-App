@@ -22,7 +22,7 @@ namespace NewGUI
 
             if (m.Equals("INIT", StringComparison.OrdinalIgnoreCase))
             {
-                return VscpProtocol.InitRequest;
+                return VscpProtocol.BuildInitRequest();
             }
 
             if (m.Equals("CONNECT", StringComparison.OrdinalIgnoreCase) || m.Equals("DISCONNECT", StringComparison.OrdinalIgnoreCase))

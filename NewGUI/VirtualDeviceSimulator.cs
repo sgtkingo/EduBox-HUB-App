@@ -23,6 +23,7 @@ namespace NewGUI
         private readonly Random _rnd = new Random();
         private int _step = 0;
         public bool IsInitialized { get; private set; }
+        public bool HoldEnabled { get; private set; } = true;
         private List<Komponenty> _sensors = new List<Komponenty>();
         private readonly HashSet<string> _connectedSensors = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -78,7 +79,11 @@ namespace NewGUI
 
             if (type == "BYE")
             {
-                if (VscpProtocol.IsBye(command, "client")) IsInitialized = false;
+                if (VscpProtocol.IsBye(command, "client"))
+                {
+                    IsInitialized = false;
+                    HoldEnabled = true;
+                }
                 return string.Empty;
             }
             if (!query.ContainsKey("type") && query.ContainsKey("seq") && query.ContainsKey("status") &&
@@ -99,6 +104,9 @@ namespace NewGUI
                 IsInitialized = false;
                 if (!query.TryGetValue("api", out var api) || api != VscpProtocol.ApiVersion)
                     return "?type=INIT&status=0&error=API mismatch";
+                if (query.TryGetValue("hold", out var hold) && hold != "0" && hold != "1")
+                    return "?type=INIT&status=0&error=Invalid hold";
+                HoldEnabled = hold != "0";
                 IsInitialized = true;
                 _step = 0;
                 var sensorTokens = new List<string>();
@@ -173,6 +181,7 @@ namespace NewGUI
         public void ResetState()
         {
             IsInitialized = false;
+            HoldEnabled = true;
             _step = 0;
             _connectedSensors.Clear();
         }
